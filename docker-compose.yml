@@ -1,0 +1,69 @@
+# Firefly III is an upstream image. This repo is not a fork of Firefly.
+# Estate talks to Firefly over HTTP. Do not modify Firefly source here.
+
+services:
+  db:
+    image: mariadb:lts
+    container_name: estatevault_firefly_db
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MYSQL_USER: ${MYSQL_USER:-firefly}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secret_firefly_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-firefly}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - firefly_iii_db:/var/lib/mysql
+    networks:
+      - estatevault
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  firefly:
+    image: fireflyiii/core:latest
+    container_name: estatevault_firefly
+    hostname: app
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - firefly_iii_upload:/var/www/html/storage/upload
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - estatevault
+
+  estate:
+    image: python:3.12-slim
+    container_name: estatevault_estate
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: ["python3", "-m", "estate"]
+    environment:
+      FIREFLY_URL: http://firefly:8080
+      FIREFLY_TOKEN: ${FIREFLY_TOKEN:-}
+      FRESHNESS_THRESHOLD_DAYS: ${FRESHNESS_THRESHOLD_DAYS:-30}
+      WARNING_LEAD_DAYS: ${WARNING_LEAD_DAYS:-7}
+      ESTATE_HOST: 0.0.0.0
+      ESTATE_PORT: "8090"
+    ports:
+      - "8090:8090"
+    depends_on:
+      - firefly
+    networks:
+      - estatevault
+
+volumes:
+  firefly_iii_upload:
+  firefly_iii_db:
+
+networks:
+  estatevault:
+    driver: bridge

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Estate Vault — Financial status</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #111;
+        --fg: #f4f1ea;
+        --muted: #b9b3a6;
+        --card: #1c1c1c;
+        --current: #2f9e44;
+        --warning: #f08c00;
+        --stale: #c92a2a;
+        --empty: #868e96;
+      }
+      body {
+        margin: 0;
+        font-family: "Iowan Old Style", Georgia, serif;
+        background: var(--bg);
+        color: var(--fg);
+      }
+      main { max-width: 42rem; margin: 2.5rem auto; padding: 0 1.25rem; }
+      h1 { font-size: 1.4rem; font-weight: 600; }
+      p, li, td, th { font-family: system-ui, sans-serif; font-size: 0.95rem; }
+      .muted { color: var(--muted); }
+      .banner {
+        padding: 1.25rem 1.4rem;
+        border-radius: 12px;
+        background: var(--card);
+        border: 1px solid #333;
+        margin: 1.25rem 0;
+      }
+      .status { font-size: 1.75rem; letter-spacing: 0.04em; }
+      .CURRENT { color: var(--current); }
+      .WARNING { color: var(--warning); }
+      .STALE, .UNAVAILABLE { color: var(--stale); }
+      .EMPTY { color: var(--empty); }
+      table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+      th, td { text-align: left; padding: 0.45rem 0; border-bottom: 1px solid #2a2a2a; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p class="muted">Estate Continuity Layer · Firefly III is the ledger</p>
+      <h1>Financial data status</h1>
+      <div id="banner" class="banner"><p class="muted">Loading…</p></div>
+      <p class="muted">
+        Firefly (day-to-day): <a href="http://127.0.0.1:8080">http://127.0.0.1:8080</a>
+      </p>
+      <table>
+        <thead>
+          <tr><th>Account</th><th>Last activity</th><th>Age</th><th>Status</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </main>
+    <script>
+      const banner = document.getElementById("banner");
+      const rows = document.getElementById("rows");
+      fetch("/api/health")
+        .then((r) => r.json())
+        .then((data) => {
+          const notes = (data.notes || []).join(" ");
+          banner.innerHTML = `
+            <div class="status ${data.status}">${data.status}</div>
+            <p>${notes || ""}</p>
+            <p class="muted">
+              Threshold: ${data.threshold_days} days ·
+              Last Estate ↔ Firefly sync: ${data.last_estate_sync || "—"} ·
+              Blocking account: ${data.stale_account || "none"}
+            </p>
+            ${data.firefly_error ? `<p>${data.firefly_error}</p>` : ""}
+          `;
+          rows.innerHTML = (data.accounts || [])
+            .map((a) => `<tr>
+              <td>${a.name}</td>
+              <td>${a.last_activity || "—"}</td>
+              <td>${a.age_days == null ? "—" : a.age_days + "d"}</td>
+              <td class="${a.status}">${a.status}</td>
+            </tr>`)
+            .join("") || `<tr><td colspan="4" class="muted">No asset accounts in Firefly yet.</td></tr>`;
+        })
+        .catch((err) => {
+          banner.innerHTML = `<div class="status UNAVAILABLE">UNAVAILABLE</div><p>${err}</p>`;
+        });
+    </script>
+  </body>
+</html>
