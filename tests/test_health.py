@@ -60,6 +60,39 @@ class HealthTests(unittest.TestCase):
         self.assertIsNone(report.stale_account)
         self.assertEqual(report_to_dict(report)["status"], "CURRENT")
 
+    def test_unused_account_does_not_block_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+                {
+                    "id": "2",
+                    "attributes": {"name": "Wells Fargo savings account", "last_activity": "2026-08-19"},
+                },
+                {"id": "3", "attributes": {"name": "Cash wallet"}},
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertIsNone(report.stale_account)
+        self.assertIs(report.accounts[2].status, Status.EMPTY)
+        self.assertTrue(any("Cash wallet" in note for note in report.notes))
+
+    def test_only_unused_accounts_is_empty(self):
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[{"id": "3", "attributes": {"name": "Cash wallet"}}],
+            as_of=date(2026, 8, 20),
+        )
+        self.assertIs(report.status, Status.EMPTY)
+        self.assertEqual(report.stale_account, "Cash wallet")
+
 
 if __name__ == "__main__":
     unittest.main()
