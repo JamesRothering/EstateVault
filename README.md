@@ -42,6 +42,7 @@ python3 -m pytest -q
 - Freshness window defaults to **30 days**, warning **7 days** before stale. Configurable in `.env`.
 - Names the account that is blocking CURRENT.
 - Asset accounts with **no activity** (e.g. an unused Cash wallet) stay listed but do not make the overall light EMPTY.
+- Active Firefly bills with an unpaid expected date on or before today block CURRENT.
 
 ## What it does not do yet
 

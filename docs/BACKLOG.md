@@ -12,13 +12,13 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 - **US-004** Freshness window configurable (default 30 days).
 - **US-005** Name the account that blocks CURRENT.
 - **US-006** Unused asset accounts (no `last_activity`) do not set overall status to EMPTY.
+- **US-013** Overdue Firefly bills block CURRENT (inactive bills ignored; no bills does not block).
 
 ## Next — Financial health
 
 - **US-010** Per-account reconciliation dates (statement / imported / reconciled).
 - **US-011** Oldest unreconciled Firefly transaction (`reconciled:false`).
 - **US-012** Last successful import/sync timestamp (Data Importer + Firefly).
-- **US-013** Bill maintenance as a freshness input (overdue Firefly bills).
 
 ## Bill management
 
