@@ -11,6 +11,7 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 - **US-003** Dashboard shows CURRENT / WARNING / STALE / EMPTY / UNAVAILABLE from Firefly.
 - **US-004** Freshness window configurable (default 30 days).
 - **US-005** Name the account that blocks CURRENT.
+- **US-006** Unused asset accounts (no `last_activity`) do not set overall status to EMPTY.
 
 ## Next — Financial health
 

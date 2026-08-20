@@ -13,7 +13,11 @@ def _load_env_file(path: Path) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip())
+        key = key.strip()
+        value = value.strip()
+        # Docker may inject FIREFLY_TOKEN= empty; a filled .env must still win.
+        if not os.environ.get(key, "").strip():
+            os.environ[key] = value
 
 
 def main() -> None:

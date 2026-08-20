@@ -41,6 +41,7 @@ python3 -m pytest -q
 - Uses Firefly `last_activity` per asset account. Oldest/worst account wins.
 - Freshness window defaults to **30 days**, warning **7 days** before stale. Configurable in `.env`.
 - Names the account that is blocking CURRENT.
+- Asset accounts with **no activity** (e.g. an unused Cash wallet) stay listed but do not make the overall light EMPTY.
 
 ## What it does not do yet
 

@@ -146,15 +146,35 @@ def assess(
             ),
         )
 
-    worst = max(rows, key=lambda row: (_WORST[row.status], row.age_days or -1))
-    stale_name = worst.name if worst.status in {Status.STALE, Status.WARNING, Status.EMPTY} else None
+    tracked = [row for row in rows if row.status is not Status.EMPTY]
+    unused = [row for row in rows if row.status is Status.EMPTY]
     notes: list[str] = []
+    if not tracked:
+        names = ", ".join(row.name for row in unused) or "accounts"
+        return HealthReport(
+            status=Status.EMPTY,
+            threshold_days=threshold_days,
+            warning_lead_days=warning_lead_days,
+            as_of=as_of,
+            firefly_ok=True,
+            firefly_error=None,
+            last_estate_sync=last_estate_sync,
+            stale_account=unused[0].name if unused else None,
+            accounts=tuple(rows),
+            notes=(f"No asset account has recorded activity yet ({names}).",),
+        )
+
+    worst = max(tracked, key=lambda row: (_WORST[row.status], row.age_days or -1))
+    stale_name = worst.name if worst.status in {Status.STALE, Status.WARNING} else None
     if worst.status == Status.STALE:
         notes.append(f"{worst.name} is past the {threshold_days}-day freshness window.")
     elif worst.status == Status.WARNING:
         notes.append(f"{worst.name} will be STALE if not maintained within the window.")
-    elif worst.status == Status.EMPTY:
-        notes.append(f"{worst.name} has no recorded activity in Firefly.")
+    if unused:
+        names = ", ".join(row.name for row in unused)
+        notes.append(
+            f"Unused (no activity, not counted toward overall status): {names}."
+        )
 
     return HealthReport(
         status=worst.status,

@@ -6,7 +6,6 @@ services:
     image: mariadb:lts
     container_name: estatevault_firefly_db
     restart: unless-stopped
-    env_file: .env
     environment:
       MYSQL_USER: ${MYSQL_USER:-firefly}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secret_firefly_password}
