@@ -1,0 +1,125 @@
+name: Ready story
+
+on:
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: ready-${{ github.repository }}-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  launch:
+    name: Launch Cursor cloud agent
+    if: github.event.label.name == 'ready' && github.event.issue.pull_request == null
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip when a PR already targets this issue
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import json, os, subprocess
+          n = os.environ["ISSUE"]
+          raw = subprocess.check_output(
+              [
+                  "gh", "pr", "list", "--repo", os.environ["REPO"], "--state", "open",
+                  "--search", n, "--json", "number,title,body",
+              ],
+              text=True,
+          )
+          needle = f"#{n}"
+          hits = [
+              p["number"]
+              for p in json.loads(raw)
+              if needle in (p.get("title") or "") or needle in (p.get("body") or "")
+          ]
+          skip = "true" if hits else "false"
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"skip={skip}\n")
+          print(f"skip={skip} existing_prs={hits}")
+          PY
+
+      - name: Comment if CURSOR_API_KEY is missing
+        if: steps.skip.outputs.skip != 'true' && secrets.CURSOR_API_KEY == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "$(cat <<'EOF'
+          This issue is labeled **ready**, but GitHub secret `CURSOR_API_KEY` is not set, so a cloud agent was not started.
+
+          Add a key from https://cursor.com/dashboard/integrations as repo secret `CURSOR_API_KEY`, connect Cursor to this GitHub repo, then remove and re-add the `ready` label.
+          EOF
+          )"
+
+      - name: Launch cloud agent
+        id: launch
+        if: steps.skip.outputs.skip != 'true' && secrets.CURSOR_API_KEY != ''
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: |
+          python3 <<'PY'
+          import base64, json, os, urllib.request
+
+          standing = open("docs/AGENT_READY.md", encoding="utf-8").read()
+          text = (
+              standing
+              + "\n\n---\n\n"
+              + f"Implement GitHub issue #{os.environ['ISSUE_NUMBER']}: {os.environ['ISSUE_TITLE']}\n"
+              + f"{os.environ['ISSUE_URL']}\n\n"
+              + f"{os.environ.get('ISSUE_BODY') or ''}\n"
+          )
+          payload = {
+              "prompt": {"text": text},
+              "source": {"repository": os.environ["REPO_URL"], "ref": "main"},
+              "target": {
+                  "autoCreatePr": True,
+                  "openAsCursorGithubApp": True,
+                  "skipReviewerRequest": True,
+                  "branchName": f"ready/issue-{os.environ['ISSUE_NUMBER']}",
+              },
+          }
+          req = urllib.request.Request(
+              "https://api.cursor.com/v0/agents",
+              data=json.dumps(payload).encode("utf-8"),
+              method="POST",
+              headers={"Content-Type": "application/json"},
+          )
+          token = base64.b64encode(f"{os.environ['CURSOR_API_KEY']}:".encode()).decode()
+          req.add_header("Authorization", f"Basic {token}")
+          with urllib.request.urlopen(req, timeout=60) as resp:
+              body = json.loads(resp.read().decode())
+          target = body.get("target") or {}
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"agent_id={body.get('id', '')}\n")
+              fh.write(f"agent_url={target.get('url', '')}\n")
+          print(json.dumps(body, indent=2))
+          PY
+
+      - name: Comment on the issue
+        if: steps.skip.outputs.skip != 'true' && secrets.CURSOR_API_KEY != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue comment "${{ github.event.issue.number }}" --repo "${{ github.repository }}" --body "$(cat <<EOF
+          Labeled **ready**. A Cursor cloud agent was started to open a review PR. It will not merge.
+
+          Agent: ${{ steps.launch.outputs.agent_url || 'https://cursor.com/agents' }}
+          EOF
+          )"

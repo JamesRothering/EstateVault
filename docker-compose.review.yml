@@ -1,10 +1,10 @@
-# Firefly III is an upstream image. This repo is not a fork of Firefly.
-# Estate talks to Firefly over HTTP. Do not modify Firefly source here.
+# Isolated review stack: empty Firefly + Estate. Separate volumes from stable.
+#   docker compose -p estatevault-review -f docker-compose.review.yml up -d
 
 services:
   db:
     image: mariadb:lts
-    container_name: estatevault_firefly_db
+    container_name: estatevault_review_db
     restart: unless-stopped
     environment:
       MYSQL_USER: ${MYSQL_USER:-firefly}
@@ -23,12 +23,14 @@ services:
 
   firefly:
     image: fireflyiii/core:latest
-    container_name: estatevault_firefly
+    container_name: estatevault_review_firefly
     hostname: app
     restart: unless-stopped
     env_file: .env
+    environment:
+      APP_URL: http://127.0.0.1:8180
     ports:
-      - "8080:8080"
+      - "8180:8080"
     volumes:
       - firefly_iii_upload:/var/www/html/storage/upload
     depends_on:
@@ -39,7 +41,7 @@ services:
 
   estate:
     image: python:3.12-slim
-    container_name: estatevault_estate
+    container_name: estatevault_review_estate
     restart: unless-stopped
     working_dir: /app
     volumes:
@@ -53,7 +55,7 @@ services:
       ESTATE_HOST: 0.0.0.0
       ESTATE_PORT: "8090"
     ports:
-      - "8090:8090"
+      - "8190:8090"
     depends_on:
       - firefly
     networks:
@@ -61,9 +63,11 @@ services:
 
 volumes:
   firefly_iii_upload:
+    name: estatevault_review_firefly_iii_upload
   firefly_iii_db:
+    name: estatevault_review_firefly_iii_db
 
 networks:
   estatevault:
-    name: estatevault
+    name: estatevault_review
     driver: bridge

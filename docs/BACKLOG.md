@@ -13,6 +13,7 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 - **US-005** Name the account that blocks CURRENT.
 - **US-006** Unused asset accounts (no `last_activity`) do not set overall status to EMPTY.
 - **US-013** Overdue Firefly bills block CURRENT (inactive bills ignored; no bills does not block).
+- **US-080** GitHub Checks, `ready` → cloud agent PR, stable `:8090` vs review `:8190`.
 
 ## Next — Financial health
 

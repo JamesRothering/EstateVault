@@ -31,8 +31,17 @@ python3 -m estate
 Tests (no Docker required):
 
 ```bash
-python3 -m pytest -q
+python3 -m unittest discover -s tests -v
 ```
+
+GitHub Actions runs the same command on every pull request (see [docs/CI.md](docs/CI.md)).
+
+## Environments
+
+- **Stable** (merged `main`): Firefly [http://127.0.0.1:8080](http://127.0.0.1:8080), Estate [http://127.0.0.1:8090](http://127.0.0.1:8090) — `./scripts/stable_up.sh`
+- **Review** (open PR): Estate [http://127.0.0.1:8190](http://127.0.0.1:8190) — `./scripts/review_up.sh <pr-or-branch>`
+
+Label an issue `ready` to start a cloud agent that opens a PR. It will not merge. Requires repo secret `CURSOR_API_KEY` after this CI slice is on `main`.
 
 ## What this first slice does
 
@@ -52,6 +61,7 @@ Bills view, cash forecast, documents vault, family logins, dead-man’s-switch n
 
 - [Architecture assessment](docs/ASSESSMENT.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [CI, stable, review](docs/CI.md)
 - [Backlog](docs/BACKLOG.md)
 
 Firefly III is AGPL-3.0 and remains upstream. This Estate layer is MIT.

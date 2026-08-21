@@ -19,6 +19,7 @@ Estate dashboard  :8090     Firefly III UI  :8080
 3. If there are no asset accounts, status is `EMPTY`, never `CURRENT`.
 4. Overall status is the **worst** of tracked asset accounts **and** active Firefly bills (`STALE` > `WARNING` > `EMPTY` > `CURRENT`). Inactive bills and unused accounts (no `last_activity`) do not count.
 5. Family users (later) must not receive `FIREFLY_TOKEN`.
+6. **Stable** vs **review**: merged `main` is `:8080` / `:8090`. Open PRs are tried on `:8190` (see [CI.md](CI.md)). Agents never merge.
 
 ## Freshness
 
