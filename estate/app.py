@@ -23,12 +23,14 @@ def _ints(name: str, default: int) -> int:
 
 
 def build_report():
-    ok, error, accounts, synced = fetch_snapshot()
+    threshold = _ints("FRESHNESS_THRESHOLD_DAYS", 30)
+    ok, error, accounts, bill_rows, synced = fetch_snapshot(lookback_days=threshold)
     return assess(
         firefly_ok=ok,
         firefly_error=error,
         accounts=accounts,
-        threshold_days=_ints("FRESHNESS_THRESHOLD_DAYS", 30),
+        bills=bill_rows,
+        threshold_days=threshold,
         warning_lead_days=_ints("WARNING_LEAD_DAYS", 7),
         last_estate_sync=synced,
     )

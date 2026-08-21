@@ -6,7 +6,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 
 class FireflyError(RuntimeError):
@@ -49,19 +49,31 @@ def about() -> dict:
     return get_json("/api/v1/about")
 
 
-def asset_accounts() -> list[dict]:
-    payload = get_json("/api/v1/accounts?type=asset")
+def _collection(payload: dict) -> list[dict]:
     data = payload.get("data") or []
     if not isinstance(data, list):
         return []
     return [item for item in data if isinstance(item, dict)]
 
 
-def fetch_snapshot() -> tuple[bool, str | None, list[dict], str]:
+def asset_accounts() -> list[dict]:
+    return _collection(get_json("/api/v1/accounts?type=asset"))
+
+
+def bills(start: date, end: date) -> list[dict]:
+    # start/end make Firefly fill pay_dates and paid_dates for the window.
+    path = f"/api/v1/bills?start={start.isoformat()}&end={end.isoformat()}"
+    return _collection(get_json(path))
+
+
+def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[dict], list[dict], str]:
     synced = datetime.now(timezone.utc).isoformat()
+    as_of = datetime.now(timezone.utc).date()
+    start = as_of - timedelta(days=max(1, lookback_days))
     try:
         about()
         accounts = asset_accounts()
+        bill_rows = bills(start, as_of)
     except FireflyError as exc:
-        return False, str(exc), [], synced
-    return True, None, accounts, synced
+        return False, str(exc), [], [], synced
+    return True, None, accounts, bill_rows, synced

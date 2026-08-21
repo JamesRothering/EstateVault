@@ -16,7 +16,7 @@ Inspected 2026-08-18. Firefly source was cloned read-only to `/tmp/firefly-iii-s
 
 **Already provides (use it, do not rebuild):** accounts, transactions, categories, budgets, bills/subscriptions, recurring transactions, rules, reconciliation (transaction `reconciled` flag), reports, CSV/bank import (via Data Importer), web UI for day-to-day bookkeeping.
 
-**API we need for Estate health:** `GET /api/v1/about`, `GET /api/v1/accounts?type=asset` (includes `last_activity`), later `GET /api/v1/search/transactions?query=reconciled:false`, bills, recurrences.
+**API we need for Estate health:** `GET /api/v1/about`, `GET /api/v1/accounts?type=asset` (includes `last_activity`), `GET /api/v1/bills?start=&end=` (`pay_dates` / `paid_dates`), later `GET /api/v1/search/transactions?query=reconciled:false`, recurrences.
 
 **Belongs in Firefly:** any number that is a ledger fact (balances, txns, bills as Firefly bills, reconciliation clicks).
 

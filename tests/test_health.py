@@ -93,6 +93,227 @@ class HealthTests(unittest.TestCase):
         self.assertIs(report.status, Status.EMPTY)
         self.assertEqual(report.stale_account, "Cash wallet")
 
+    def test_no_bills_does_not_block_current_accounts(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.bills, ())
+
+    def test_overdue_unpaid_bill_blocks_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "next_expected_match": "2026-08-01T00:00:00+00:00",
+                        "pay_dates": ["2026-08-01T00:00:00+00:00"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertEqual(report.stale_bill, "Electric")
+        self.assertEqual(report.blocking, "Electric")
+        self.assertIs(report.bills[0].status, Status.STALE)
+        self.assertTrue(report.bills[0].overdue)
+        self.assertTrue(any("Electric" in note for note in report.notes))
+
+    def test_paid_bill_does_not_block_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "next_expected_match": "2026-09-01T00:00:00+00:00",
+                        "pay_dates": ["2026-08-01T00:00:00+00:00"],
+                        "paid_dates": [
+                            {
+                                "transaction_group_id": "12",
+                                "date": "2026-08-03T00:00:00+00:00",
+                            }
+                        ],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertIsNone(report.stale_bill)
+        self.assertIs(report.bills[0].status, Status.CURRENT)
+        self.assertFalse(report.bills[0].overdue)
+
+    def test_inactive_overdue_bill_is_ignored(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Old magazine",
+                        "active": False,
+                        "pay_dates": ["2026-08-01T00:00:00+00:00"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertIsNone(report.stale_bill)
+        self.assertEqual(report.bills, ())
+
+    def test_past_next_expected_match_without_pay_dates_is_stale(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "4",
+                    "attributes": {
+                        "name": "HOA",
+                        "active": True,
+                        "next_expected_match": "2026-07-15",
+                        "pay_dates": [],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertEqual(report.stale_bill, "HOA")
+
+    def test_future_expected_bill_does_not_block(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "2",
+                    "attributes": {
+                        "name": "Insurance",
+                        "active": True,
+                        "next_expected_match": "2026-11-01T00:00:00+00:00",
+                        "pay_dates": ["2026-11-01T00:00:00+00:00"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertIs(report.bills[0].status, Status.CURRENT)
+        self.assertFalse(report.bills[0].overdue)
+
+    def test_overdue_bill_with_only_unused_accounts_is_stale(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[{"id": "3", "attributes": {"name": "Cash wallet"}}],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertEqual(report.stale_bill, "Electric")
+
+    def test_report_dict_includes_bills(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        payload = report_to_dict(report)
+        self.assertEqual(payload["stale_bill"], "Electric")
+        self.assertEqual(payload["blocking"], "Electric")
+        self.assertEqual(payload["bills"][0]["name"], "Electric")
+        self.assertEqual(payload["bills"][0]["status"], "STALE")
+
 
 if __name__ == "__main__":
     unittest.main()

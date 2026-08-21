@@ -57,6 +57,14 @@
         </thead>
         <tbody id="rows"></tbody>
       </table>
+      <h1>Bills</h1>
+      <p class="muted">Overdue Firefly bills block CURRENT the same way a stale account does.</p>
+      <table>
+        <thead>
+          <tr><th>Bill</th><th>Expected</th><th>Last paid</th><th>Status</th></tr>
+        </thead>
+        <tbody id="bill-rows"></tbody>
+      </table>
     </main>
     <script>
       const banner = document.getElementById("banner");
@@ -71,7 +79,7 @@
             <p class="muted">
               Threshold: ${data.threshold_days} days ·
               Last Estate ↔ Firefly sync: ${data.last_estate_sync || "—"} ·
-              Blocking account: ${data.stale_account || "none"}
+              Blocking: ${data.blocking || data.stale_account || data.stale_bill || "none"}
             </p>
             ${data.firefly_error ? `<p>${data.firefly_error}</p>` : ""}
           `;
@@ -83,6 +91,16 @@
               <td class="${a.status}">${a.status}</td>
             </tr>`)
             .join("") || `<tr><td colspan="4" class="muted">No asset accounts in Firefly yet.</td></tr>`;
+          const billBody = document.getElementById("bill-rows");
+          const billList = data.bills || [];
+          billBody.innerHTML = billList.length
+            ? billList.map((b) => `<tr>
+              <td>${b.name}</td>
+              <td>${b.next_expected || "—"}</td>
+              <td>${b.last_paid || "—"}</td>
+              <td class="${b.status}">${b.overdue ? "OVERDUE" : b.status}</td>
+            </tr>`).join("")
+            : `<tr><td colspan="4" class="muted">No active Firefly bills in this window.</td></tr>`;
         })
         .catch((err) => {
           banner.innerHTML = `<div class="status UNAVAILABLE">UNAVAILABLE</div><p>${err}</p>`;
