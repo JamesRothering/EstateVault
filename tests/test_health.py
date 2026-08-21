@@ -43,6 +43,60 @@ class HealthTests(unittest.TestCase):
         self.assertIs(classify_age(10, 30, 7), Status.CURRENT)
         self.assertIs(classify_age(31, 30, 7), Status.STALE)
 
+    def test_warning_account_is_named(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Chase Checking", "last_activity": "2026-08-19"},
+                },
+                {
+                    "id": "2",
+                    "attributes": {"name": "Amex", "last_activity": "2026-07-27"},
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.WARNING)
+        self.assertEqual(report.stale_account, "Amex")
+        self.assertEqual(report.blocking, "Amex")
+        payload = report_to_dict(report)
+        self.assertEqual(payload["stale_account"], "Amex")
+        self.assertEqual(payload["accounts"][1]["last_activity"], "2026-07-27")
+        self.assertEqual(payload["accounts"][1]["age_days"], 24)
+        self.assertEqual(payload["accounts"][1]["status"], "WARNING")
+
+    def test_stale_account_still_named_when_bill_is_worse(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "2",
+                    "attributes": {"name": "Amex", "last_activity": "2026-07-27"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertEqual(report.stale_bill, "Electric")
+        self.assertEqual(report.stale_account, "Amex")
+
     def test_all_current(self):
         as_of = date(2026, 8, 18)
         report = assess(
