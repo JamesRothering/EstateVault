@@ -10,6 +10,7 @@ class CiLayoutTests(unittest.TestCase):
         text = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         self.assertIn("python3 -m unittest discover -s tests -v", text)
         self.assertIn("pull_request", text)
+        self.assertIn(".env.example", text)
 
     def test_ready_workflow_does_not_merge(self):
         text = (ROOT / ".github" / "workflows" / "ready.yml").read_text(encoding="utf-8")

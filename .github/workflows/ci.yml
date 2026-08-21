@@ -29,5 +29,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate compose
         run: |
+          cp .env.example .env
           docker compose -f docker-compose.yml config --quiet
           docker compose -f docker-compose.review.yml config --quiet
