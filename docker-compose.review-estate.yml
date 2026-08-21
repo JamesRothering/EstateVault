@@ -1,0 +1,30 @@
+# Review Estate only: PR code on :8190, talking to the stable Firefly container.
+# Requires the stable stack (network `estatevault`, container `estatevault_firefly`).
+#
+#   docker compose -p estatevault-review-estate -f docker-compose.review-estate.yml up -d
+
+services:
+  estate:
+    image: python:3.12-slim
+    container_name: estatevault_estate_review
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command: ["python3", "-m", "estate"]
+    environment:
+      FIREFLY_URL: http://estatevault_firefly:8080
+      FIREFLY_TOKEN: ${FIREFLY_TOKEN:-}
+      FRESHNESS_THRESHOLD_DAYS: ${FRESHNESS_THRESHOLD_DAYS:-30}
+      WARNING_LEAD_DAYS: ${WARNING_LEAD_DAYS:-7}
+      ESTATE_HOST: 0.0.0.0
+      ESTATE_PORT: "8090"
+    ports:
+      - "8190:8090"
+    networks:
+      - stable
+
+networks:
+  stable:
+    external: true
+    name: estatevault
