@@ -40,6 +40,7 @@
       .EMPTY { color: var(--empty); }
       table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
       th, td { text-align: left; padding: 0.45rem 0; border-bottom: 1px solid #2a2a2a; }
+      tr.stale-account td { font-weight: 600; }
       a { color: inherit; }
     </style>
   </head>
@@ -78,13 +79,14 @@
             <p>${notes || ""}</p>
             <p class="muted">
               Threshold: ${data.threshold_days} days ·
-              Last Estate ↔ Firefly sync: ${data.last_estate_sync || "—"} ·
-              Blocking: ${data.blocking || data.stale_account || data.stale_bill || "none"}
+              Last Estate ↔ Firefly sync: ${data.last_estate_sync || "—"}
             </p>
+            <p>Account to reconcile: ${data.stale_account || "none"}</p>
+            <p class="muted">Blocking: ${data.blocking || data.stale_account || data.stale_bill || "none"}</p>
             ${data.firefly_error ? `<p>${data.firefly_error}</p>` : ""}
           `;
           rows.innerHTML = (data.accounts || [])
-            .map((a) => `<tr>
+            .map((a) => `<tr class="${a.name === data.stale_account ? "stale-account" : ""}">
               <td>${a.name}</td>
               <td>${a.last_activity || "—"}</td>
               <td>${a.age_days == null ? "—" : a.age_days + "d"}</td>
