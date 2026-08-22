@@ -49,3 +49,30 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("8190:8090", text)
         self.assertIn("estatevault_firefly", text)
         self.assertIn("external: true", text)
+
+    def test_acceptance_workflow_uses_isolated_review_stack(self):
+        text = (ROOT / ".github" / "workflows" / "acceptance.yml").read_text(encoding="utf-8")
+        self.assertIn("pull_request", text)
+        self.assertIn("self-hosted", text)
+        self.assertIn("estatevault-review", text)
+        self.assertIn("127.0.0.1:8180", text)
+        self.assertIn("127.0.0.1:8190", text)
+        self.assertIn("scripts/acceptance_up.sh", text)
+        self.assertIn("scripts/acceptance_down.sh", text)
+        self.assertNotIn("stable_up.sh", text)
+        self.assertNotIn("down -v", text)
+        self.assertNotIn("gh pr merge", text)
+        for i, line in enumerate(text.splitlines(), 1):
+            if line.strip().startswith("if:") and "secrets." in line:
+                self.fail(f"line {i}: do not use secrets in if: ({line.strip()})")
+
+    def test_acceptance_scripts_do_not_touch_stable_project(self):
+        up = (ROOT / "scripts" / "acceptance_up.sh").read_text(encoding="utf-8")
+        down = (ROOT / "scripts" / "acceptance_down.sh").read_text(encoding="utf-8")
+        self.assertIn("-p estatevault-review", up)
+        self.assertIn("docker-compose.review.yml", up)
+        self.assertIn("-p estatevault-review", down)
+        self.assertNotRegex(up, r"-p estatevault[ \n'\"]")
+        self.assertNotRegex(down, r"-p estatevault[ \n'\"]")
+        self.assertNotIn("down -v", up)
+        self.assertNotIn("down -v", down)

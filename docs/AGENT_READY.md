@@ -17,7 +17,8 @@ Firefly III is the only financial ledger (official Docker image). Estate is a th
 ## Environments
 
 - **Stable** is `main` at http://127.0.0.1:8080 (Firefly) and http://127.0.0.1:8090 (Estate). Do not point those ports at your branch.
-- **Review** is the PR, tried at http://127.0.0.1:8190 via `scripts/review_up.sh`.
-- GitHub Actions runs unit tests. That is not a running Firefly.
+- **Review** is the PR, tried at http://127.0.0.1:8190 via `scripts/review_up.sh` (may attach to stable Firefly).
+- **Acceptance** is isolated Firefly `:8180` + Estate `:8190`, Compose project `estatevault-review`, started by the Acceptance workflow on a self-hosted Mac runner. Do not point those ports at stable and do not wipe the stable volume.
+- GitHub-hosted Actions runs unit tests. That is not a running Firefly.
 
 If you cannot finish, comment on the issue with what blocked you and still leave a draft PR if there is code.

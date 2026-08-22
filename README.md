@@ -40,6 +40,7 @@ GitHub Actions runs the same command on every pull request (see [docs/CI.md](doc
 
 - **Stable** (merged `main`): Firefly [http://127.0.0.1:8080](http://127.0.0.1:8080), Estate [http://127.0.0.1:8090](http://127.0.0.1:8090) — `./scripts/stable_up.sh`
 - **Review** (open PR): Estate [http://127.0.0.1:8190](http://127.0.0.1:8190) — `./scripts/review_up.sh <pr-or-branch>`
+- **Acceptance** (isolated PR stack): Firefly [http://127.0.0.1:8180](http://127.0.0.1:8180), Estate [http://127.0.0.1:8190](http://127.0.0.1:8190) — self-hosted runner + `./scripts/acceptance_up.sh`
 
 Label an issue `ready` to start a cloud agent that opens a PR. It will not merge. Requires repo secret `CURSOR_API_KEY` after this CI slice is on `main`.
 
