@@ -62,6 +62,7 @@ class HealthReport:
     blocking: str | None = None
     oldest_unreconciled: date | None = None
     oldest_unreconciled_account: str | None = None
+    last_import_at: date | None = None
     accounts: tuple[AccountFreshness, ...] = field(default_factory=tuple)
     bills: tuple[BillFreshness, ...] = field(default_factory=tuple)
     notes: tuple[str, ...] = field(default_factory=tuple)
@@ -167,6 +168,11 @@ def _is_imported_split(split: dict) -> bool:
         str(split.get("import_hash_v2") or "").strip()
         or str(split.get("external_id") or "").strip()
     )
+
+
+def _last_import_across(rows: list[AccountFreshness]) -> date | None:
+    dates = [row.imported_date for row in rows if row.imported_date is not None]
+    return max(dates) if dates else None
 
 
 def _oldest_unreconciled_across(
@@ -324,6 +330,7 @@ def assess(
     unused = [row for row in rows if row.status is Status.EMPTY]
     notes: list[str] = []
     oldest_unrec_day, oldest_unrec_name = _oldest_unreconciled_across(rows)
+    last_import_at = _last_import_across(rows)
 
     worst_bill = (
         max(bill_rows, key=lambda row: _rank(row.status, row.age_days)) if bill_rows else None
@@ -389,6 +396,7 @@ def assess(
                 blocking=stale_bill,
                 oldest_unreconciled=oldest_unrec_day,
                 oldest_unreconciled_account=oldest_unrec_name,
+                last_import_at=last_import_at,
                 accounts=tuple(rows),
                 bills=bill_rows,
                 notes=tuple(notes),
@@ -405,6 +413,7 @@ def assess(
             stale_bill=stale_bill,
             oldest_unreconciled=oldest_unrec_day,
             oldest_unreconciled_account=oldest_unrec_name,
+            last_import_at=last_import_at,
             accounts=tuple(rows),
             bills=bill_rows,
             notes=(f"No asset account has recorded activity yet ({names}).",),
@@ -457,6 +466,7 @@ def assess(
         blocking=blocking,
         oldest_unreconciled=oldest_unrec_day,
         oldest_unreconciled_account=oldest_unrec_name,
+        last_import_at=last_import_at,
         accounts=tuple(rows),
         bills=bill_rows,
         notes=tuple(notes),
@@ -479,6 +489,7 @@ def report_to_dict(report: HealthReport) -> dict:
         if report.oldest_unreconciled
         else None,
         "oldest_unreconciled_account": report.oldest_unreconciled_account,
+        "last_import_at": report.last_import_at.isoformat() if report.last_import_at else None,
         "notes": list(report.notes),
         "accounts": [
             {

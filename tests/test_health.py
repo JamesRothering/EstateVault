@@ -522,6 +522,53 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(report.oldest_unreconciled_account, "Amex")
         self.assertEqual(report_to_dict(report)["oldest_unreconciled"], "2026-06-01")
 
+    def test_last_import_from_firefly_external_id_does_not_fake_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "12",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-12",
+                                "reconciled": True,
+                                "source_id": "1",
+                                "external_id": "importer-1",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.last_import_at, date(2026, 8, 12))
+        self.assertEqual(report_to_dict(report)["last_import_at"], "2026-08-12")
+
+    def test_missing_import_is_none_not_a_fake_timestamp(self):
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            as_of=date(2026, 8, 20),
+        )
+        self.assertIsNone(report.last_import_at)
+        self.assertIs(report.status, Status.CURRENT)
+
 
 if __name__ == "__main__":
     unittest.main()
