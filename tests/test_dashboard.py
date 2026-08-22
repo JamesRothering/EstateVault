@@ -11,3 +11,11 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("Account to reconcile:", html)
         self.assertIn("data.stale_account", html)
         self.assertIn("stale-account", html)
+
+    def test_dashboard_loads_health_from_firefly_api(self):
+        html = DASHBOARD.read_text(encoding="utf-8")
+        self.assertIn('fetch("/api/health")', html)
+        self.assertIn("data.status", html)
+        self.assertIn("data.accounts", html)
+        for status in ("CURRENT", "WARNING", "STALE", "EMPTY", "UNAVAILABLE"):
+            self.assertIn(status, html)
