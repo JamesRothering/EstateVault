@@ -368,6 +368,111 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(payload["bills"][0]["name"], "Electric")
         self.assertEqual(payload["bills"][0]["status"], "STALE")
 
+    def test_unreconciled_beyond_window_blocks_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "10",
+                    "attributes": {
+                        "date": "2026-06-01",
+                        "transactions": [
+                            {
+                                "date": "2026-06-01",
+                                "reconciled": False,
+                                "source_id": "1",
+                                "source_name": "Wells Fargo",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+            threshold_days=30,
+            warning_lead_days=7,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertIsNot(report.status, Status.CURRENT)
+        self.assertEqual(report.accounts[0].oldest_unreconciled, date(2026, 6, 1))
+        self.assertEqual(report.accounts[0].reconciled_through, date(2026, 5, 31))
+        self.assertTrue(any("unreconciled" in note for note in report.notes))
+
+    def test_recent_unreconciled_inside_window_can_stay_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "11",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-18",
+                                "reconciled": False,
+                                "source_id": "1",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.accounts[0].oldest_unreconciled, date(2026, 8, 18))
+
+    def test_imported_and_statement_dates_from_firefly_splits(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "12",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-10",
+                                "reconciled": True,
+                                "source_id": "1",
+                                "external_id": "plaid-99",
+                                "process_date": "2026-08-09",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.accounts[0].imported_date, date(2026, 8, 10))
+        self.assertEqual(report.accounts[0].statement_date, date(2026, 8, 9))
+        self.assertEqual(report.accounts[0].reconciled_through, date(2026, 8, 10))
+        payload = report_to_dict(report)
+        self.assertEqual(payload["accounts"][0]["imported_date"], "2026-08-10")
+        self.assertEqual(payload["accounts"][0]["statement_date"], "2026-08-09")
+        self.assertEqual(payload["accounts"][0]["reconciled_through"], "2026-08-10")
+
 
 if __name__ == "__main__":
     unittest.main()

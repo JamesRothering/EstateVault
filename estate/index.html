@@ -54,7 +54,7 @@
       </p>
       <table>
         <thead>
-          <tr><th>Account</th><th>Last activity</th><th>Age</th><th>Status</th></tr>
+          <tr><th>Account</th><th>Last activity</th><th>Statement</th><th>Imported</th><th>Reconciled through</th><th>Age</th><th>Status</th></tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
@@ -89,10 +89,13 @@
             .map((a) => `<tr class="${a.name === data.stale_account ? "stale-account" : ""}">
               <td>${a.name}</td>
               <td>${a.last_activity || "—"}</td>
+              <td>${a.statement_date || "—"}</td>
+              <td>${a.imported_date || "—"}</td>
+              <td>${a.reconciled_through || "—"}</td>
               <td>${a.age_days == null ? "—" : a.age_days + "d"}</td>
               <td class="${a.status}">${a.status}</td>
             </tr>`)
-            .join("") || `<tr><td colspan="4" class="muted">No asset accounts in Firefly yet.</td></tr>`;
+            .join("") || `<tr><td colspan="7" class="muted">No asset accounts in Firefly yet.</td></tr>`;
           const billBody = document.getElementById("bill-rows");
           const billList = data.bills || [];
           billBody.innerHTML = billList.length

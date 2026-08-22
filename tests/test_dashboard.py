@@ -19,3 +19,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("data.accounts", html)
         for status in ("CURRENT", "WARNING", "STALE", "EMPTY", "UNAVAILABLE"):
             self.assertIn(status, html)
+        self.assertIn("Reconciled through", html)
+        self.assertIn("statement_date", html)
+        self.assertIn("imported_date", html)
+        self.assertIn("reconciled_through", html)
