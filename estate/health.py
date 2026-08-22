@@ -60,6 +60,8 @@ class HealthReport:
     stale_account: str | None
     stale_bill: str | None = None
     blocking: str | None = None
+    oldest_unreconciled: date | None = None
+    oldest_unreconciled_account: str | None = None
     accounts: tuple[AccountFreshness, ...] = field(default_factory=tuple)
     bills: tuple[BillFreshness, ...] = field(default_factory=tuple)
     notes: tuple[str, ...] = field(default_factory=tuple)
@@ -165,6 +167,16 @@ def _is_imported_split(split: dict) -> bool:
         str(split.get("import_hash_v2") or "").strip()
         or str(split.get("external_id") or "").strip()
     )
+
+
+def _oldest_unreconciled_across(
+    rows: list[AccountFreshness],
+) -> tuple[date | None, str | None]:
+    dated = [row for row in rows if row.oldest_unreconciled is not None]
+    if not dated:
+        return None, None
+    oldest = min(dated, key=lambda row: row.oldest_unreconciled or date.max)
+    return oldest.oldest_unreconciled, oldest.name
 
 
 def account_from_firefly(
@@ -311,6 +323,7 @@ def assess(
     tracked = [row for row in rows if row.status is not Status.EMPTY]
     unused = [row for row in rows if row.status is Status.EMPTY]
     notes: list[str] = []
+    oldest_unrec_day, oldest_unrec_name = _oldest_unreconciled_across(rows)
 
     worst_bill = (
         max(bill_rows, key=lambda row: _rank(row.status, row.age_days)) if bill_rows else None
@@ -374,6 +387,8 @@ def assess(
                 stale_account=unused[0].name if unused else None,
                 stale_bill=stale_bill,
                 blocking=stale_bill,
+                oldest_unreconciled=oldest_unrec_day,
+                oldest_unreconciled_account=oldest_unrec_name,
                 accounts=tuple(rows),
                 bills=bill_rows,
                 notes=tuple(notes),
@@ -388,6 +403,8 @@ def assess(
             last_estate_sync=last_estate_sync,
             stale_account=unused[0].name if unused else None,
             stale_bill=stale_bill,
+            oldest_unreconciled=oldest_unrec_day,
+            oldest_unreconciled_account=oldest_unrec_name,
             accounts=tuple(rows),
             bills=bill_rows,
             notes=(f"No asset account has recorded activity yet ({names}).",),
@@ -438,6 +455,8 @@ def assess(
         stale_account=stale_name,
         stale_bill=stale_bill,
         blocking=blocking,
+        oldest_unreconciled=oldest_unrec_day,
+        oldest_unreconciled_account=oldest_unrec_name,
         accounts=tuple(rows),
         bills=bill_rows,
         notes=tuple(notes),
@@ -456,6 +475,10 @@ def report_to_dict(report: HealthReport) -> dict:
         "stale_account": report.stale_account,
         "stale_bill": report.stale_bill,
         "blocking": report.blocking,
+        "oldest_unreconciled": report.oldest_unreconciled.isoformat()
+        if report.oldest_unreconciled
+        else None,
+        "oldest_unreconciled_account": report.oldest_unreconciled_account,
         "notes": list(report.notes),
         "accounts": [
             {

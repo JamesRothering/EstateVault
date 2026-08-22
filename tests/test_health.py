@@ -473,6 +473,55 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(payload["accounts"][0]["statement_date"], "2026-08-09")
         self.assertEqual(payload["accounts"][0]["reconciled_through"], "2026-08-10")
 
+    def test_oldest_unreconciled_across_accounts_is_on_the_report(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+                {
+                    "id": "2",
+                    "attributes": {"name": "Amex", "last_activity": "2026-08-18"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "10",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-10",
+                                "reconciled": False,
+                                "source_id": "1",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "id": "11",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-06-01",
+                                "reconciled": False,
+                                "source_id": "2",
+                            }
+                        ],
+                    },
+                },
+            ],
+            as_of=as_of,
+            threshold_days=30,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertEqual(report.oldest_unreconciled, date(2026, 6, 1))
+        self.assertEqual(report.oldest_unreconciled_account, "Amex")
+        self.assertEqual(report_to_dict(report)["oldest_unreconciled"], "2026-06-01")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,3 +23,5 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("statement_date", html)
         self.assertIn("imported_date", html)
         self.assertIn("reconciled_through", html)
+        self.assertIn("Oldest unreconciled", html)
+        self.assertIn("oldest_unreconciled", html)

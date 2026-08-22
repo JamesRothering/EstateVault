@@ -82,6 +82,7 @@
               Last Estate ↔ Firefly sync: ${data.last_estate_sync || "—"}
             </p>
             <p>Account to reconcile: ${data.stale_account || "none"}</p>
+            <p>Oldest unreconciled: ${data.oldest_unreconciled || "none"}${data.oldest_unreconciled_account ? " (" + data.oldest_unreconciled_account + ")" : ""}</p>
             <p class="muted">Blocking: ${data.blocking || data.stale_account || data.stale_bill || "none"}</p>
             ${data.firefly_error ? `<p>${data.firefly_error}</p>` : ""}
           `;
