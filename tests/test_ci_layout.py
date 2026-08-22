@@ -18,6 +18,25 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("autoCreatePr", text)
         self.assertNotIn("gh pr merge", text)
 
+    def test_ready_workflow_only_runs_on_issue_labels(self):
+        text = (ROOT / ".github" / "workflows" / "ready.yml").read_text(encoding="utf-8")
+        self.assertIn("on:\n  issues:", text)
+        self.assertNotIn("workflow_dispatch", text)
+        self.assertNotRegex(
+            text,
+            r"(?m)^on:\n(?:  .*\n)*  push:",
+            "ready.yml must not run on push; GitHub emails a failure for every commit",
+        )
+
+    def test_ready_workflow_does_not_use_secrets_in_if(self):
+        """GitHub rejects secrets in if: and emails a 0s failure named after the file."""
+        text = (ROOT / ".github" / "workflows" / "ready.yml").read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            if line.strip().startswith("if:") and "secrets." in line:
+                self.fail(f"line {i}: do not use secrets in if: ({line.strip()})")
+        self.assertIn("CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}", text)
+        self.assertIn('mode=missing_key', text)
+
     def test_review_compose_uses_separate_ports_and_volumes(self):
         text = (ROOT / "docker-compose.review.yml").read_text(encoding="utf-8")
         self.assertIn("8190:8090", text)
