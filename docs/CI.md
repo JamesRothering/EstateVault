@@ -52,3 +52,5 @@ Default review starts **Estate only** on 8190 and talks to the stable Firefly co
 Create the API key at [Cursor Integrations](https://cursor.com/dashboard/integrations). Store it as repo secret `CURSOR_API_KEY`. Connect Cursor GitHub access to `JamesRothering/EstateVault`.
 
 Until that secret exists, labeling `ready` comments on the issue instead of starting an agent.
+
+Do not put `secrets.*` in a workflow `if:`. GitHub treats that file as invalid and emails a 0-second failure named `.github/workflows/ready.yml` on every push. The ready workflow copies the key into job `env` and branches on a `mode` output instead.
