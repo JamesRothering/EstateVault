@@ -46,6 +46,11 @@ class BillFreshness:
     overdue: bool
     age_days: int | None
     status: Status
+    amount: str | None = None
+    currency: str | None = None
+    frequency: str | None = None
+    payee: str | None = None
+    pay_from: str | None = None
 
 
 @dataclass(frozen=True)
@@ -253,6 +258,16 @@ def account_from_firefly(
     )
 
 
+def _bill_amount(attributes: dict) -> str | None:
+    lo = attributes.get("amount_min")
+    hi = attributes.get("amount_max")
+    if lo in (None, "") and hi in (None, ""):
+        return None
+    if hi in (None, "") or str(lo) == str(hi):
+        return str(lo)
+    return f"{lo}–{hi}"
+
+
 def bill_from_firefly(payload: dict, *, as_of: date) -> BillFreshness | None:
     attributes = payload.get("attributes") or {}
     if not _is_active(attributes.get("active")):
@@ -272,14 +287,25 @@ def bill_from_firefly(payload: dict, *, as_of: date) -> BillFreshness | None:
     overdue = overdue_on is not None
     age = (as_of - overdue_on).days if overdue_on is not None else None
     status = Status.STALE if overdue else Status.CURRENT
+    name = str(attributes.get("name") or f"Bill {payload.get('id')}")
+    pay_from = (
+        attributes.get("source_name")
+        or attributes.get("account_name")
+        or attributes.get("from_name")
+    )
     return BillFreshness(
         id=str(payload.get("id") or ""),
-        name=str(attributes.get("name") or f"Bill {payload.get('id')}"),
+        name=name,
         last_paid=last_paid,
         next_expected=next_expected or (due[0] if due else None),
         overdue=overdue,
         age_days=age,
         status=status,
+        amount=_bill_amount(attributes),
+        currency=str(attributes.get("currency_code") or "") or None,
+        frequency=str(attributes.get("repeat_freq") or "") or None,
+        payee=str(attributes.get("object_group_title") or name),
+        pay_from=str(pay_from).strip() if pay_from else None,
     )
 
 
@@ -509,6 +535,11 @@ def report_to_dict(report: HealthReport) -> dict:
             {
                 "id": row.id,
                 "name": row.name,
+                "payee": row.payee,
+                "amount": row.amount,
+                "currency": row.currency,
+                "frequency": row.frequency,
+                "pay_from": row.pay_from,
                 "last_paid": row.last_paid.isoformat() if row.last_paid else None,
                 "next_expected": row.next_expected.isoformat() if row.next_expected else None,
                 "overdue": row.overdue,

@@ -27,3 +27,6 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("oldest_unreconciled", html)
         self.assertIn("Last Firefly import/sync", html)
         self.assertIn("last_import_at", html)
+        self.assertIn("Pay from", html)
+        self.assertIn("b.frequency", html)
+        self.assertIn("b.pay_from", html)

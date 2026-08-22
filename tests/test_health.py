@@ -569,6 +569,48 @@ class HealthTests(unittest.TestCase):
         self.assertIsNone(report.last_import_at)
         self.assertIs(report.status, Status.CURRENT)
 
+    def test_consolidated_bill_view_uses_firefly_fields(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "amount_min": "85.00",
+                        "amount_max": "85.00",
+                        "currency_code": "USD",
+                        "repeat_freq": "monthly",
+                        "object_group_title": "Utilities",
+                        "source_name": "Wells Fargo",
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        bill = report.bills[0]
+        self.assertEqual(bill.name, "Electric")
+        self.assertEqual(bill.payee, "Utilities")
+        self.assertEqual(bill.amount, "85.00")
+        self.assertEqual(bill.currency, "USD")
+        self.assertEqual(bill.frequency, "monthly")
+        self.assertEqual(bill.pay_from, "Wells Fargo")
+        payload = report_to_dict(report)["bills"][0]
+        self.assertEqual(payload["frequency"], "monthly")
+        self.assertEqual(payload["pay_from"], "Wells Fargo")
+        self.assertEqual(payload["amount"], "85.00")
+
 
 if __name__ == "__main__":
     unittest.main()
