@@ -368,6 +368,249 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(payload["bills"][0]["name"], "Electric")
         self.assertEqual(payload["bills"][0]["status"], "STALE")
 
+    def test_unreconciled_beyond_window_blocks_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "10",
+                    "attributes": {
+                        "date": "2026-06-01",
+                        "transactions": [
+                            {
+                                "date": "2026-06-01",
+                                "reconciled": False,
+                                "source_id": "1",
+                                "source_name": "Wells Fargo",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+            threshold_days=30,
+            warning_lead_days=7,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertIsNot(report.status, Status.CURRENT)
+        self.assertEqual(report.accounts[0].oldest_unreconciled, date(2026, 6, 1))
+        self.assertEqual(report.accounts[0].reconciled_through, date(2026, 5, 31))
+        self.assertTrue(any("unreconciled" in note for note in report.notes))
+
+    def test_recent_unreconciled_inside_window_can_stay_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "11",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-18",
+                                "reconciled": False,
+                                "source_id": "1",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.accounts[0].oldest_unreconciled, date(2026, 8, 18))
+
+    def test_imported_and_statement_dates_from_firefly_splits(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "12",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-10",
+                                "reconciled": True,
+                                "source_id": "1",
+                                "external_id": "plaid-99",
+                                "process_date": "2026-08-09",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.accounts[0].imported_date, date(2026, 8, 10))
+        self.assertEqual(report.accounts[0].statement_date, date(2026, 8, 9))
+        self.assertEqual(report.accounts[0].reconciled_through, date(2026, 8, 10))
+        payload = report_to_dict(report)
+        self.assertEqual(payload["accounts"][0]["imported_date"], "2026-08-10")
+        self.assertEqual(payload["accounts"][0]["statement_date"], "2026-08-09")
+        self.assertEqual(payload["accounts"][0]["reconciled_through"], "2026-08-10")
+
+    def test_oldest_unreconciled_across_accounts_is_on_the_report(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+                {
+                    "id": "2",
+                    "attributes": {"name": "Amex", "last_activity": "2026-08-18"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "10",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-10",
+                                "reconciled": False,
+                                "source_id": "1",
+                            }
+                        ],
+                    },
+                },
+                {
+                    "id": "11",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-06-01",
+                                "reconciled": False,
+                                "source_id": "2",
+                            }
+                        ],
+                    },
+                },
+            ],
+            as_of=as_of,
+            threshold_days=30,
+        )
+        self.assertIs(report.status, Status.STALE)
+        self.assertEqual(report.oldest_unreconciled, date(2026, 6, 1))
+        self.assertEqual(report.oldest_unreconciled_account, "Amex")
+        self.assertEqual(report_to_dict(report)["oldest_unreconciled"], "2026-06-01")
+
+    def test_last_import_from_firefly_external_id_does_not_fake_current(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            transactions=[
+                {
+                    "id": "12",
+                    "attributes": {
+                        "transactions": [
+                            {
+                                "date": "2026-08-12",
+                                "reconciled": True,
+                                "source_id": "1",
+                                "external_id": "importer-1",
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.last_import_at, date(2026, 8, 12))
+        self.assertEqual(report_to_dict(report)["last_import_at"], "2026-08-12")
+
+    def test_missing_import_is_none_not_a_fake_timestamp(self):
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            as_of=date(2026, 8, 20),
+        )
+        self.assertIsNone(report.last_import_at)
+        self.assertIs(report.status, Status.CURRENT)
+
+    def test_consolidated_bill_view_uses_firefly_fields(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "amount_min": "85.00",
+                        "amount_max": "85.00",
+                        "currency_code": "USD",
+                        "repeat_freq": "monthly",
+                        "object_group_title": "Utilities",
+                        "source_name": "Wells Fargo",
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        bill = report.bills[0]
+        self.assertEqual(bill.name, "Electric")
+        self.assertEqual(bill.payee, "Utilities")
+        self.assertEqual(bill.amount, "85.00")
+        self.assertEqual(bill.currency, "USD")
+        self.assertEqual(bill.frequency, "monthly")
+        self.assertEqual(bill.pay_from, "Wells Fargo")
+        payload = report_to_dict(report)["bills"][0]
+        self.assertEqual(payload["frequency"], "monthly")
+        self.assertEqual(payload["pay_from"], "Wells Fargo")
+        self.assertEqual(payload["amount"], "85.00")
+
 
 if __name__ == "__main__":
     unittest.main()

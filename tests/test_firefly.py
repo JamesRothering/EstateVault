@@ -42,11 +42,12 @@ class FireflyClientTests(unittest.TestCase):
 
     def test_fetch_snapshot_empty_token_is_not_ok(self):
         with patch.dict(os.environ, {"FIREFLY_TOKEN": ""}, clear=False):
-            ok, err, accounts, bills, _synced = fetch_snapshot()
+            ok, err, accounts, bills, _synced, txs = fetch_snapshot()
         self.assertFalse(ok)
         self.assertIn("FIREFLY_TOKEN", err or "")
         self.assertEqual(accounts, [])
         self.assertEqual(bills, [])
+        self.assertEqual(txs, [])
 
     def test_build_report_empty_token_is_unavailable_not_current(self):
         with patch.dict(os.environ, {"FIREFLY_TOKEN": ""}, clear=False):
@@ -83,3 +84,34 @@ class FireflyClientTests(unittest.TestCase):
                 rows = asset_accounts()
         self.assertEqual(rows[0]["attributes"]["name"], "Wells Fargo")
         self.assertIn("/api/v1/accounts?type=asset", captured["url"])
+
+    def test_search_transactions_uses_firefly_query(self):
+        from estate.firefly import search_transactions
+
+        captured = {}
+
+        def fake_urlopen(req, timeout=None):
+            captured["url"] = req.full_url
+            return _Resp(
+                {
+                    "data": [
+                        {
+                            "id": "10",
+                            "attributes": {
+                                "transactions": [
+                                    {"date": "2026-06-01", "reconciled": False, "source_id": "1"}
+                                ]
+                            },
+                        }
+                    ],
+                    "meta": {"pagination": {"current_page": 1, "total_pages": 1}},
+                }
+            )
+
+        env = {"FIREFLY_TOKEN": "pat-test", "FIREFLY_URL": "http://ff.example"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("urllib.request.urlopen", fake_urlopen):
+                rows = search_transactions("reconciled:false")
+        self.assertEqual(rows[0]["id"], "10")
+        self.assertIn("/api/v1/search/transactions?query=", captured["url"])
+        self.assertIn("reconciled", captured["url"])

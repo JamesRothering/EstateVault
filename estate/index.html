@@ -54,15 +54,15 @@
       </p>
       <table>
         <thead>
-          <tr><th>Account</th><th>Last activity</th><th>Age</th><th>Status</th></tr>
+          <tr><th>Account</th><th>Last activity</th><th>Statement</th><th>Imported</th><th>Reconciled through</th><th>Age</th><th>Status</th></tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
       <h1>Bills</h1>
-      <p class="muted">Overdue Firefly bills block CURRENT the same way a stale account does.</p>
+      <p class="muted">Overdue Firefly bills block CURRENT the same way a stale account does. Extra notes Firefly does not store wait for US-022.</p>
       <table>
         <thead>
-          <tr><th>Bill</th><th>Expected</th><th>Last paid</th><th>Status</th></tr>
+          <tr><th>Bill</th><th>Payee</th><th>Amount</th><th>Frequency</th><th>Due</th><th>Pay from</th><th>Last paid</th><th>Status</th></tr>
         </thead>
         <tbody id="bill-rows"></tbody>
       </table>
@@ -82,6 +82,8 @@
               Last Estate ↔ Firefly sync: ${data.last_estate_sync || "—"}
             </p>
             <p>Account to reconcile: ${data.stale_account || "none"}</p>
+            <p>Oldest unreconciled: ${data.oldest_unreconciled || "none"}${data.oldest_unreconciled_account ? " (" + data.oldest_unreconciled_account + ")" : ""}</p>
+            <p class="muted">Last Firefly import/sync: ${data.last_import_at || "none"}</p>
             <p class="muted">Blocking: ${data.blocking || data.stale_account || data.stale_bill || "none"}</p>
             ${data.firefly_error ? `<p>${data.firefly_error}</p>` : ""}
           `;
@@ -89,20 +91,27 @@
             .map((a) => `<tr class="${a.name === data.stale_account ? "stale-account" : ""}">
               <td>${a.name}</td>
               <td>${a.last_activity || "—"}</td>
+              <td>${a.statement_date || "—"}</td>
+              <td>${a.imported_date || "—"}</td>
+              <td>${a.reconciled_through || "—"}</td>
               <td>${a.age_days == null ? "—" : a.age_days + "d"}</td>
               <td class="${a.status}">${a.status}</td>
             </tr>`)
-            .join("") || `<tr><td colspan="4" class="muted">No asset accounts in Firefly yet.</td></tr>`;
+            .join("") || `<tr><td colspan="7" class="muted">No asset accounts in Firefly yet.</td></tr>`;
           const billBody = document.getElementById("bill-rows");
           const billList = data.bills || [];
           billBody.innerHTML = billList.length
             ? billList.map((b) => `<tr>
               <td>${b.name}</td>
+              <td>${b.payee || b.name || "—"}</td>
+              <td>${b.amount ? (b.currency ? b.currency + " " : "") + b.amount : "—"}</td>
+              <td>${b.frequency || "—"}</td>
               <td>${b.next_expected || "—"}</td>
+              <td>${b.pay_from || "—"}</td>
               <td>${b.last_paid || "—"}</td>
               <td class="${b.status}">${b.overdue ? "OVERDUE" : b.status}</td>
             </tr>`).join("")
-            : `<tr><td colspan="4" class="muted">No active Firefly bills in this window.</td></tr>`;
+            : `<tr><td colspan="8" class="muted">No active Firefly bills in this window.</td></tr>`;
         })
         .catch((err) => {
           banner.innerHTML = `<div class="status UNAVAILABLE">UNAVAILABLE</div><p>${err}</p>`;

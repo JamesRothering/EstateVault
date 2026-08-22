@@ -8,7 +8,7 @@ from estate.health import assess
 
 
 ROOT = Path(__file__).resolve().parent.parent
-_EMPTY_SNAPSHOT = (True, None, [], [], "sync")
+_EMPTY_SNAPSHOT = (True, None, [], [], "sync", [])
 
 
 class FreshnessWindowTests(unittest.TestCase):

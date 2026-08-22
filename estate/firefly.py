@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
@@ -66,7 +67,36 @@ def bills(start: date, end: date) -> list[dict]:
     return _collection(get_json(path))
 
 
-def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[dict], list[dict], str]:
+def search_transactions(query: str, *, limit: int = 50, max_pages: int = 20) -> list[dict]:
+    out: list[dict] = []
+    page = 1
+    while page <= max_pages:
+        encoded = urllib.parse.quote(query, safe="")
+        payload = get_json(
+            f"/api/v1/search/transactions?query={encoded}&limit={limit}&page={page}"
+        )
+        rows = _collection(payload)
+        out.extend(rows)
+        pagination = (payload.get("meta") or {}).get("pagination") or {}
+        last = int(pagination.get("total_pages") or 1)
+        current = int(pagination.get("current_page") or page)
+        if current >= last or not rows:
+            break
+        page += 1
+    return out
+
+
+def recon_transactions() -> list[dict]:
+    by_id: dict[str, dict] = {}
+    for query in ("reconciled:false", "has_any_external_id:true"):
+        for row in search_transactions(query):
+            key = str(row.get("id") or "")
+            if key:
+                by_id[key] = row
+    return list(by_id.values())
+
+
+def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[dict], list[dict], str, list[dict]]:
     synced = datetime.now(timezone.utc).isoformat()
     as_of = datetime.now(timezone.utc).date()
     start = as_of - timedelta(days=max(1, lookback_days))
@@ -74,6 +104,7 @@ def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[d
         about()
         accounts = asset_accounts()
         bill_rows = bills(start, as_of)
+        txs = recon_transactions()
     except FireflyError as exc:
-        return False, str(exc), [], [], synced
-    return True, None, accounts, bill_rows, synced
+        return False, str(exc), [], [], synced, []
+    return True, None, accounts, bill_rows, synced, txs
