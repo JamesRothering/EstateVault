@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN
 from enum import Enum
+from typing import Iterable
+
+_CENTS = Decimal("0.01")
+ESTIMATE_LOOKBACK_DAYS = 365
+ESTIMATE_LABEL = "estimate"
+SOURCE_HISTORICAL = "historical_average"
+SOURCE_MIDPOINT = "range_midpoint"
 
 
 class Status(str, Enum):
@@ -51,6 +59,11 @@ class BillFreshness:
     frequency: str | None = None
     payee: str | None = None
     pay_from: str | None = None
+    amount_estimate: str | None = None
+    expected_next_amount: str | None = None
+    estimate_label: str | None = None
+    estimate_source: str | None = None
+    payment_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -268,7 +281,119 @@ def _bill_amount(attributes: dict) -> str | None:
     return f"{lo}–{hi}"
 
 
-def bill_from_firefly(payload: dict, *, as_of: date) -> BillFreshness | None:
+def parse_money(value: object) -> Decimal | None:
+    if value is None:
+        return None
+    text = str(value).strip().replace(",", "")
+    if not text:
+        return None
+    try:
+        return abs(Decimal(text))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _format_money(value: Decimal) -> str:
+    return str(value.quantize(_CENTS, rounding=ROUND_HALF_EVEN))
+
+
+def historical_average(amounts: Iterable[Decimal]) -> Decimal | None:
+    values = sorted(abs(amount) for amount in amounts)
+    if not values:
+        return None
+    total = sum(values, Decimal("0"))
+    return (total / Decimal(len(values))).quantize(_CENTS, rounding=ROUND_HALF_EVEN)
+
+
+def range_midpoint(minimum: object, maximum: object) -> Decimal | None:
+    lo = parse_money(minimum)
+    hi = parse_money(maximum)
+    if lo is None and hi is None:
+        return None
+    if lo is None:
+        return hi.quantize(_CENTS, rounding=ROUND_HALF_EVEN) if hi is not None else None
+    if hi is None:
+        return lo.quantize(_CENTS, rounding=ROUND_HALF_EVEN)
+    return ((lo + hi) / Decimal(2)).quantize(_CENTS, rounding=ROUND_HALF_EVEN)
+
+
+def _in_lookback(day: date | None, *, as_of: date, lookback_days: int) -> bool:
+    if day is None:
+        return True
+    start = as_of - timedelta(days=lookback_days)
+    return start <= day <= as_of
+
+
+def _payment_amounts(
+    payload: dict,
+    *,
+    as_of: date,
+    transactions: list[dict] | None,
+    lookback_days: int,
+) -> list[Decimal]:
+    bill_id = str(payload.get("id") or "")
+    from_splits: list[Decimal] = []
+    for split, group_day in iter_splits(transactions):
+        if bill_id and str(split.get("bill_id") or "") != bill_id:
+            continue
+        if not bill_id:
+            continue
+        day = _split_day(split, group_day)
+        if not _in_lookback(day, as_of=as_of, lookback_days=lookback_days):
+            continue
+        money = parse_money(split.get("amount"))
+        if money is not None:
+            from_splits.append(money)
+    if from_splits:
+        return from_splits
+    attributes = payload.get("attributes") or {}
+    from_paid: list[Decimal] = []
+    paid = attributes.get("paid_dates") or []
+    if not isinstance(paid, list):
+        paid = [paid]
+    for item in paid:
+        if not isinstance(item, dict):
+            continue
+        day = parse_day(item.get("date"))
+        if not _in_lookback(day, as_of=as_of, lookback_days=lookback_days):
+            continue
+        money = parse_money(item.get("amount"))
+        if money is not None:
+            from_paid.append(money)
+    return from_paid
+
+
+def _bill_estimate(
+    payload: dict,
+    *,
+    as_of: date,
+    transactions: list[dict] | None,
+    lookback_days: int,
+) -> tuple[str | None, str | None, int]:
+    amounts = _payment_amounts(
+        payload,
+        as_of=as_of,
+        transactions=transactions,
+        lookback_days=lookback_days,
+    )
+    average = historical_average(amounts)
+    if average is not None:
+        text = _format_money(average)
+        return text, SOURCE_HISTORICAL, len(amounts)
+    attributes = payload.get("attributes") or {}
+    midpoint = range_midpoint(attributes.get("amount_min"), attributes.get("amount_max"))
+    if midpoint is None:
+        return None, None, 0
+    return _format_money(midpoint), SOURCE_MIDPOINT, 0
+
+
+def bill_from_firefly(
+    payload: dict,
+    *,
+    as_of: date,
+    transactions: list[dict] | None = None,
+    estimate_lookback_days: int = ESTIMATE_LOOKBACK_DAYS,
+) -> BillFreshness | None:
     attributes = payload.get("attributes") or {}
     if not _is_active(attributes.get("active")):
         return None
@@ -293,6 +418,12 @@ def bill_from_firefly(payload: dict, *, as_of: date) -> BillFreshness | None:
         or attributes.get("account_name")
         or attributes.get("from_name")
     )
+    estimate, source, payment_count = _bill_estimate(
+        payload,
+        as_of=as_of,
+        transactions=transactions,
+        lookback_days=estimate_lookback_days,
+    )
     return BillFreshness(
         id=str(payload.get("id") or ""),
         name=name,
@@ -306,6 +437,11 @@ def bill_from_firefly(payload: dict, *, as_of: date) -> BillFreshness | None:
         frequency=str(attributes.get("repeat_freq") or "") or None,
         payee=str(attributes.get("object_group_title") or name),
         pay_from=str(pay_from).strip() if pay_from else None,
+        amount_estimate=estimate,
+        expected_next_amount=estimate,
+        estimate_label=ESTIMATE_LABEL if estimate is not None else None,
+        estimate_source=source,
+        payment_count=payment_count,
     )
 
 
@@ -325,7 +461,10 @@ def assess(
     bill_rows = tuple(
         row
         for item in (bills or [])
-        if (row := bill_from_firefly(item, as_of=as_of)) is not None
+        if (
+            row := bill_from_firefly(item, as_of=as_of, transactions=transactions)
+        )
+        is not None
     )
     if not firefly_ok:
         return HealthReport(
@@ -540,6 +679,11 @@ def report_to_dict(report: HealthReport) -> dict:
                 "currency": row.currency,
                 "frequency": row.frequency,
                 "pay_from": row.pay_from,
+                "amount_estimate": row.amount_estimate,
+                "expected_next_amount": row.expected_next_amount,
+                "estimate_label": row.estimate_label,
+                "estimate_source": row.estimate_source,
+                "payment_count": row.payment_count,
                 "last_paid": row.last_paid.isoformat() if row.last_paid else None,
                 "next_expected": row.next_expected.isoformat() if row.next_expected else None,
                 "overdue": row.overdue,

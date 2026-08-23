@@ -30,3 +30,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("Pay from", html)
         self.assertIn("b.frequency", html)
         self.assertIn("b.pay_from", html)
+        self.assertIn("Next (estimate)", html)
+        self.assertIn("b.amount_estimate", html)
+        self.assertIn("b.estimate_label", html)
+        self.assertIn("estimate", html)

@@ -55,7 +55,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
             return
         if self.path.startswith("/api/health"):
-            payload = report_to_dict(build_report())
+            try:
+                payload = report_to_dict(build_report())
+            except Exception as exc:  # noqa: BLE001 — dashboard must still answer
+                payload = {
+                    "status": "UNAVAILABLE",
+                    "firefly_ok": False,
+                    "firefly_error": str(exc),
+                    "bills": [],
+                    "accounts": [],
+                    "notes": ["Estate could not finish reading Firefly."],
+                }
             self._send(200, json.dumps(payload).encode("utf-8"), "application/json")
             return
         self._send(404, b'{"error":"not found"}', "application/json")

@@ -9,6 +9,8 @@ import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
+from estate.health import ESTIMATE_LOOKBACK_DAYS
+
 
 class FireflyError(RuntimeError):
     pass
@@ -96,15 +98,71 @@ def recon_transactions() -> list[dict]:
     return list(by_id.values())
 
 
+def bill_transactions(bill_id: str, start: date, end: date, *, limit: int = 50, max_pages: int = 20) -> list[dict]:
+    encoded = urllib.parse.quote(str(bill_id), safe="")
+    return _paginated(
+        f"/api/v1/bills/{encoded}/transactions"
+        f"?start={start.isoformat()}&end={end.isoformat()}",
+        limit=limit,
+        max_pages=max_pages,
+    )
+
+
+def list_transactions(start: date, end: date, *, tx_type: str = "withdrawal", limit: int = 50, max_pages: int = 20) -> list[dict]:
+    # One windowed list instead of N+1 GETs per bill, so /api/health cannot stall.
+    return _paginated(
+        f"/api/v1/transactions?type={urllib.parse.quote(tx_type, safe='')}"
+        f"&start={start.isoformat()}&end={end.isoformat()}",
+        limit=limit,
+        max_pages=max_pages,
+    )
+
+
+def _paginated(path_without_page: str, *, limit: int, max_pages: int) -> list[dict]:
+    out: list[dict] = []
+    page = 1
+    sep = "&" if "?" in path_without_page else "?"
+    while page <= max_pages:
+        payload = get_json(f"{path_without_page}{sep}limit={limit}&page={page}")
+        rows = _collection(payload)
+        out.extend(rows)
+        pagination = (payload.get("meta") or {}).get("pagination") or {}
+        last = int(pagination.get("total_pages") or 1)
+        current = int(pagination.get("current_page") or page)
+        if current >= last or not rows:
+            break
+        page += 1
+    return out
+
+
+def _merge_transactions(*groups: list[dict]) -> list[dict]:
+    by_id: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for group in groups:
+        for row in group:
+            key = str(row.get("id") or "")
+            if key:
+                by_id[key] = row
+            else:
+                anonymous.append(row)
+    return list(by_id.values()) + anonymous
+
+
 def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[dict], list[dict], str, list[dict]]:
     synced = datetime.now(timezone.utc).isoformat()
     as_of = datetime.now(timezone.utc).date()
     start = as_of - timedelta(days=max(1, lookback_days))
+    history_start = as_of - timedelta(days=ESTIMATE_LOOKBACK_DAYS)
     try:
         about()
         accounts = asset_accounts()
         bill_rows = bills(start, as_of)
         txs = recon_transactions()
+        try:
+            history = list_transactions(history_start, as_of)
+        except FireflyError:
+            history = []
+        txs = _merge_transactions(txs, history)
     except FireflyError as exc:
         return False, str(exc), [], [], synced, []
     return True, None, accounts, bill_rows, synced, txs
