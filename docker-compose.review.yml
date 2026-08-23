@@ -7,16 +7,18 @@ services:
     container_name: estatevault_review_db
     restart: unless-stopped
     environment:
-      MYSQL_USER: ${MYSQL_USER:-firefly}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-secret_firefly_password}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-firefly}
+      # Pinned: runner checkouts bootstrap a new .env each job; the volume keeps the first password.
+      MYSQL_USER: firefly
+      MYSQL_PASSWORD: estatevault_review_only
+      MYSQL_DATABASE: firefly
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MARIADB_AUTO_UPGRADE: "1"
     volumes:
       - firefly_iii_db:/var/lib/mysql
     networks:
       - estatevault
     healthcheck:
-      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      test: ["CMD", "healthcheck.sh", "--su-mysql", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
       retries: 36
@@ -30,6 +32,12 @@ services:
     env_file: .env
     environment:
       APP_URL: http://127.0.0.1:8180
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_DATABASE: firefly
+      DB_USERNAME: firefly
+      DB_PASSWORD: estatevault_review_only
     ports:
       - "8180:8080"
     volumes:

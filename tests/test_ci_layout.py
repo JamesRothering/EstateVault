@@ -43,6 +43,9 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("8180:8080", text)
         self.assertIn("estatevault_review_firefly_iii_db", text)
         self.assertIn("start_period: 600s", text)
+        self.assertIn("--su-mysql", text)
+        self.assertIn("estatevault_review_only", text)
+        self.assertIn("MARIADB_AUTO_UPGRADE", text)
         self.assertNotIn("8080:8080", text)
 
     def test_review_estate_uses_stable_firefly(self):
@@ -80,6 +83,9 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("leftover Created", up)
         self.assertIn("up -d db", up)
         self.assertIn("review db status", up)
+        self.assertIn(".estatevault-review.env", up)
+        self.assertIn("estatevault_review_firefly_iii_db", up)
+        self.assertIn("volume rm", up)
         self.assertIn("127.0.0.1:8190/api/health", up)
         self.assertIn("127.0.0.1:8180", up)
         self.assertIn("-p estatevault-review", down)
@@ -87,6 +93,7 @@ class CiLayoutTests(unittest.TestCase):
         self.assertNotRegex(down, r"-p estatevault[ \n'\"]")
         self.assertNotIn("down -v", up)
         self.assertNotIn("down -v", down)
+        self.assertNotRegex(up, r"volume rm[^\n]*\bestatevault_firefly_iii_db\b")
 
     def test_acceptance_runner_install_raises_worker_ipc_timeout(self):
         text = (ROOT / "scripts" / "install_acceptance_runner.sh").read_text(encoding="utf-8")
