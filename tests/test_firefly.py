@@ -136,7 +136,7 @@ class FireflyClientTests(unittest.TestCase):
                         ]
                     }
                 )
-            if "/api/v1/bills/9/transactions" in req.full_url:
+            if "/api/v1/transactions?type=withdrawal" in req.full_url:
                 return _Resp(
                     {
                         "data": [
@@ -173,5 +173,5 @@ class FireflyClientTests(unittest.TestCase):
         self.assertTrue(ok)
         self.assertIsNone(err)
         self.assertEqual(bills[0]["id"], "9")
-        self.assertTrue(any("/api/v1/bills/9/transactions" in url for url in urls))
+        self.assertTrue(any("/api/v1/transactions?type=withdrawal" in url for url in urls))
         self.assertEqual(txs[0]["id"], "77")

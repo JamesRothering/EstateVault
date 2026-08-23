@@ -99,14 +99,31 @@ def recon_transactions() -> list[dict]:
 
 
 def bill_transactions(bill_id: str, start: date, end: date, *, limit: int = 50, max_pages: int = 20) -> list[dict]:
+    encoded = urllib.parse.quote(str(bill_id), safe="")
+    return _paginated(
+        f"/api/v1/bills/{encoded}/transactions"
+        f"?start={start.isoformat()}&end={end.isoformat()}",
+        limit=limit,
+        max_pages=max_pages,
+    )
+
+
+def list_transactions(start: date, end: date, *, tx_type: str = "withdrawal", limit: int = 50, max_pages: int = 20) -> list[dict]:
+    # One windowed list instead of N+1 GETs per bill, so /api/health cannot stall.
+    return _paginated(
+        f"/api/v1/transactions?type={urllib.parse.quote(tx_type, safe='')}"
+        f"&start={start.isoformat()}&end={end.isoformat()}",
+        limit=limit,
+        max_pages=max_pages,
+    )
+
+
+def _paginated(path_without_page: str, *, limit: int, max_pages: int) -> list[dict]:
     out: list[dict] = []
     page = 1
-    encoded = urllib.parse.quote(str(bill_id), safe="")
+    sep = "&" if "?" in path_without_page else "?"
     while page <= max_pages:
-        payload = get_json(
-            f"/api/v1/bills/{encoded}/transactions"
-            f"?start={start.isoformat()}&end={end.isoformat()}&limit={limit}&page={page}"
-        )
+        payload = get_json(f"{path_without_page}{sep}limit={limit}&page={page}")
         rows = _collection(payload)
         out.extend(rows)
         pagination = (payload.get("meta") or {}).get("pagination") or {}
@@ -141,15 +158,10 @@ def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[d
         accounts = asset_accounts()
         bill_rows = bills(start, as_of)
         txs = recon_transactions()
-        history: list[dict] = []
-        for bill in bill_rows:
-            bill_id = str(bill.get("id") or "")
-            if not bill_id:
-                continue
-            try:
-                history.extend(bill_transactions(bill_id, history_start, as_of))
-            except FireflyError:
-                continue
+        try:
+            history = list_transactions(history_start, as_of)
+        except FireflyError:
+            history = []
         txs = _merge_transactions(txs, history)
     except FireflyError as exc:
         return False, str(exc), [], [], synced, []
