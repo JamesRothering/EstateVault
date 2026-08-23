@@ -83,6 +83,7 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("leftover Created", up)
         self.assertIn("up -d db", up)
         self.assertIn("review db status", up)
+        self.assertIn("waiting for review MariaDB", up)
         self.assertIn(".estatevault-review.env", up)
         self.assertIn("estatevault_review_firefly_iii_db", up)
         self.assertIn("volume rm", up)

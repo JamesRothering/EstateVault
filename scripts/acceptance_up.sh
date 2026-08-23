@@ -36,7 +36,7 @@ start_stack() {
   while true; do
     dbhealth="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' estatevault_review_db 2>/dev/null || echo missing)"
     echo "review db status=${dbhealth} $(date -u +%H:%M:%SZ)"
-    if [[ "$dbhealth" == healthy ]]; then
+    if [[ "$dbhealth" == healthy ]] || review_db_accepts_firefly; then
       break
     fi
     if (( SECONDS >= deadline )); then
