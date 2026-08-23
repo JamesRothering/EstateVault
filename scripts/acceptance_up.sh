@@ -11,7 +11,11 @@ if [[ ! -f .env ]]; then
   python3 scripts/bootstrap_env.py
 fi
 
+export COMPOSE_PROGRESS=plain
 docker compose -p estatevault-review -f docker-compose.review.yml up -d
+
+python3 scripts/wait_http.py --url http://127.0.0.1:8190/api/health --name Estate --timeout 180 --interval 10
+python3 scripts/wait_http.py --url http://127.0.0.1:8180 --name Firefly --timeout 900 --interval 10
 
 if [[ -n "${PR_NUMBER:-}" ]]; then
   printf '%s\n' "$PR_NUMBER" > "$STATE"

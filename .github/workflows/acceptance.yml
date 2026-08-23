@@ -6,7 +6,7 @@ on:
 
 concurrency:
   group: estatevault-acceptance
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -17,13 +17,30 @@ jobs:
     name: Bring up isolated acceptance
     if: github.event.action != 'closed'
     runs-on: [self-hosted, macOS]
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROGRESS: plain
     steps:
+      - name: Runner heartbeat
+        run: |
+          echo "host=$(hostname)"
+          docker info --format 'docker={{.ServerVersion}}' 
+          date -u
+
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Start isolated review stack
         run: ./scripts/acceptance_up.sh
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+
+      - name: Prove ports answer
+        run: |
+          python3 scripts/wait_http.py --url http://127.0.0.1:8190/api/health --name Estate --timeout 30 --interval 5
+          python3 scripts/wait_http.py --url http://127.0.0.1:8180 --name Firefly --timeout 30 --interval 5
+          curl -fsS http://127.0.0.1:8190/api/health | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'status' in d, d"
 
       - name: Comment acceptance URLs
         env:
@@ -45,8 +62,14 @@ jobs:
     name: Tear down isolated acceptance
     if: github.event.action == 'closed'
     runs-on: [self-hosted, macOS]
+    timeout-minutes: 10
     steps:
+      - name: Runner heartbeat
+        run: echo "host=$(hostname)"; date -u
+
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Stop review stack if this PR owns it
         run: ./scripts/acceptance_down.sh

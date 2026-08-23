@@ -47,7 +47,7 @@ Default review starts **Estate only** on 8190 and talks to the stable Firefly co
 GitHub-hosted Checks still do not run Firefly. To put a PR on this Mac automatically:
 
 1. Install the self-hosted runner once: `./scripts/install_acceptance_runner.sh` then `$HOME/estatevault-actions-runner/run.sh` (Docker Desktop must be running).
-2. On every open PR, workflow **Acceptance** starts Compose project `estatevault-review`: Firefly [http://127.0.0.1:8180](http://127.0.0.1:8180), Estate [http://127.0.0.1:8190](http://127.0.0.1:8190).
+2. On every open PR, workflow **Acceptance** starts Compose project `estatevault-review`: Firefly [http://127.0.0.1:8180](http://127.0.0.1:8180), Estate [http://127.0.0.1:8190](http://127.0.0.1:8190). The job **fails** unless those URLs return HTTP (not connection refused). Prints a line every 10s so the self-hosted runner does not look idle and get dropped.
 3. Closing or merging the PR tears that stack down. Stable `:8080` / `:8090` and its MariaDB volume are not used.
 
 The isolated ledger is **empty**. It is not a copy of Wells Fargo. One PR at a time on 8180/8190.

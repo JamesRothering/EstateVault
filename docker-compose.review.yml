@@ -58,6 +58,17 @@ services:
       - "8190:8090"
     depends_on:
       - firefly
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/api/health', timeout=3)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     networks:
       - estatevault
 
