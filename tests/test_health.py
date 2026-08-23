@@ -1,7 +1,16 @@
 import unittest
 from datetime import date
 
-from estate.health import Status, assess, classify_age, report_to_dict
+from decimal import Decimal
+
+from estate.health import (
+    Status,
+    assess,
+    classify_age,
+    historical_average,
+    parse_money,
+    report_to_dict,
+)
 
 
 class HealthTests(unittest.TestCase):
@@ -610,6 +619,182 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(payload["frequency"], "monthly")
         self.assertEqual(payload["pay_from"], "Wells Fargo")
         self.assertEqual(payload["amount"], "85.00")
+        self.assertEqual(payload["amount_estimate"], "85.00")
+        self.assertEqual(payload["expected_next_amount"], "85.00")
+        self.assertEqual(payload["estimate_label"], "estimate")
+        self.assertEqual(payload["estimate_source"], "range_midpoint")
+
+    def test_parse_money_uses_absolute_decimal(self):
+        self.assertEqual(parse_money("-90.50"), Decimal("90.50"))
+        self.assertEqual(parse_money("80.00"), Decimal("80.00"))
+        self.assertIsNone(parse_money("not-a-number"))
+        self.assertIsNone(parse_money(None))
+
+    def test_historical_average_is_deterministic_mean(self):
+        self.assertEqual(
+            historical_average([Decimal("100.00"), Decimal("80.00"), Decimal("90.00")]),
+            Decimal("90.00"),
+        )
+        self.assertEqual(
+            historical_average([Decimal("90.00"), Decimal("80.00"), Decimal("100.00")]),
+            historical_average([Decimal("100.00"), Decimal("80.00"), Decimal("90.00")]),
+        )
+        self.assertEqual(
+            historical_average([Decimal("1.00"), Decimal("1.01")]),
+            Decimal("1.00"),
+        )
+        self.assertIsNone(historical_average([]))
+
+    def test_variable_bill_average_from_linked_payments_is_labeled_estimate(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "amount_min": "80.00",
+                        "amount_max": "120.00",
+                        "currency_code": "USD",
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [{"date": "2026-08-03"}],
+                    },
+                },
+            ],
+            transactions=[
+                {
+                    "id": "11",
+                    "attributes": {
+                        "date": "2026-06-03",
+                        "transactions": [{"amount": "-80.00", "bill_id": "9"}],
+                    },
+                },
+                {
+                    "id": "12",
+                    "attributes": {
+                        "date": "2026-07-02",
+                        "transactions": [{"amount": "-100.00", "bill_id": "9"}],
+                    },
+                },
+                {
+                    "id": "13",
+                    "attributes": {
+                        "date": "2026-08-03",
+                        "transactions": [{"amount": "-90.00", "bill_id": "9"}],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        bill = report.bills[0]
+        self.assertEqual(bill.amount, "80.00–120.00")
+        self.assertEqual(bill.amount_estimate, "90.00")
+        self.assertEqual(bill.expected_next_amount, "90.00")
+        self.assertEqual(bill.estimate_label, "estimate")
+        self.assertEqual(bill.estimate_source, "historical_average")
+        self.assertEqual(bill.payment_count, 3)
+        payload = report_to_dict(report)["bills"][0]
+        self.assertEqual(payload["amount_estimate"], "90.00")
+        self.assertEqual(payload["expected_next_amount"], "90.00")
+        self.assertEqual(payload["estimate_label"], "estimate")
+        self.assertEqual(payload["estimate_source"], "historical_average")
+        self.assertEqual(payload["payment_count"], 3)
+
+    def test_variable_bill_without_history_uses_midpoint_still_labeled_estimate(self):
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "amount_min": "80.00",
+                        "amount_max": "120.00",
+                        "pay_dates": ["2026-09-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=date(2026, 8, 20),
+        )
+        bill = report.bills[0]
+        self.assertEqual(bill.amount, "80.00–120.00")
+        self.assertEqual(bill.amount_estimate, "100.00")
+        self.assertEqual(bill.expected_next_amount, "100.00")
+        self.assertEqual(bill.estimate_label, "estimate")
+        self.assertEqual(bill.estimate_source, "range_midpoint")
+        self.assertEqual(bill.payment_count, 0)
+
+    def test_other_bills_and_old_payments_do_not_change_average(self):
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "amount_min": "80.00",
+                        "amount_max": "120.00",
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [{"date": "2026-08-03", "amount": "90.00"}],
+                    },
+                },
+            ],
+            transactions=[
+                {
+                    "id": "1",
+                    "attributes": {
+                        "date": "2024-08-20",
+                        "transactions": [{"amount": "-10.00", "bill_id": "9"}],
+                    },
+                },
+                {
+                    "id": "2",
+                    "attributes": {
+                        "date": "2026-07-01",
+                        "transactions": [{"amount": "-999.00", "bill_id": "8"}],
+                    },
+                },
+                {
+                    "id": "3",
+                    "attributes": {
+                        "date": "2026-07-02",
+                        "transactions": [{"amount": "-90.00", "bill_id": "9"}],
+                    },
+                },
+            ],
+            as_of=date(2026, 8, 20),
+        )
+        bill = report.bills[0]
+        self.assertEqual(bill.amount_estimate, "90.00")
+        self.assertEqual(bill.estimate_source, "historical_average")
+        self.assertEqual(bill.payment_count, 1)
+        self.assertEqual(bill.estimate_label, "estimate")
 
 
 if __name__ == "__main__":

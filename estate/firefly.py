@@ -9,6 +9,8 @@ import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
+from estate.health import ESTIMATE_LOOKBACK_DAYS
+
 
 class FireflyError(RuntimeError):
     pass
@@ -96,15 +98,59 @@ def recon_transactions() -> list[dict]:
     return list(by_id.values())
 
 
+def bill_transactions(bill_id: str, start: date, end: date, *, limit: int = 50, max_pages: int = 20) -> list[dict]:
+    out: list[dict] = []
+    page = 1
+    encoded = urllib.parse.quote(str(bill_id), safe="")
+    while page <= max_pages:
+        payload = get_json(
+            f"/api/v1/bills/{encoded}/transactions"
+            f"?start={start.isoformat()}&end={end.isoformat()}&limit={limit}&page={page}"
+        )
+        rows = _collection(payload)
+        out.extend(rows)
+        pagination = (payload.get("meta") or {}).get("pagination") or {}
+        last = int(pagination.get("total_pages") or 1)
+        current = int(pagination.get("current_page") or page)
+        if current >= last or not rows:
+            break
+        page += 1
+    return out
+
+
+def _merge_transactions(*groups: list[dict]) -> list[dict]:
+    by_id: dict[str, dict] = {}
+    anonymous: list[dict] = []
+    for group in groups:
+        for row in group:
+            key = str(row.get("id") or "")
+            if key:
+                by_id[key] = row
+            else:
+                anonymous.append(row)
+    return list(by_id.values()) + anonymous
+
+
 def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[dict], list[dict], str, list[dict]]:
     synced = datetime.now(timezone.utc).isoformat()
     as_of = datetime.now(timezone.utc).date()
     start = as_of - timedelta(days=max(1, lookback_days))
+    history_start = as_of - timedelta(days=ESTIMATE_LOOKBACK_DAYS)
     try:
         about()
         accounts = asset_accounts()
         bill_rows = bills(start, as_of)
         txs = recon_transactions()
+        history: list[dict] = []
+        for bill in bill_rows:
+            bill_id = str(bill.get("id") or "")
+            if not bill_id:
+                continue
+            try:
+                history.extend(bill_transactions(bill_id, history_start, as_of))
+            except FireflyError:
+                continue
+        txs = _merge_transactions(txs, history)
     except FireflyError as exc:
         return False, str(exc), [], [], synced, []
     return True, None, accounts, bill_rows, synced, txs

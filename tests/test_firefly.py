@@ -115,3 +115,63 @@ class FireflyClientTests(unittest.TestCase):
         self.assertEqual(rows[0]["id"], "10")
         self.assertIn("/api/v1/search/transactions?query=", captured["url"])
         self.assertIn("reconciled", captured["url"])
+
+    def test_fetch_snapshot_loads_bill_payment_history(self):
+        urls = []
+
+        def fake_urlopen(req, timeout=None):
+            urls.append(req.full_url)
+            if req.full_url.endswith("/api/v1/about"):
+                return _Resp({"data": {"version": "6.2.0"}})
+            if "/api/v1/accounts?type=asset" in req.full_url:
+                return _Resp({"data": []})
+            if "/api/v1/bills?" in req.full_url:
+                return _Resp(
+                    {
+                        "data": [
+                            {
+                                "id": "9",
+                                "attributes": {"name": "Electric", "active": True},
+                            }
+                        ]
+                    }
+                )
+            if "/api/v1/bills/9/transactions" in req.full_url:
+                return _Resp(
+                    {
+                        "data": [
+                            {
+                                "id": "77",
+                                "attributes": {
+                                    "date": "2026-07-01",
+                                    "transactions": [
+                                        {
+                                            "amount": "-90.00",
+                                            "bill_id": "9",
+                                            "date": "2026-07-01",
+                                        }
+                                    ],
+                                },
+                            }
+                        ],
+                        "meta": {"pagination": {"current_page": 1, "total_pages": 1}},
+                    }
+                )
+            if "/api/v1/search/transactions" in req.full_url:
+                return _Resp(
+                    {
+                        "data": [],
+                        "meta": {"pagination": {"current_page": 1, "total_pages": 1}},
+                    }
+                )
+            return _Resp({"data": []})
+
+        env = {"FIREFLY_TOKEN": "pat-test", "FIREFLY_URL": "http://ff.example"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("urllib.request.urlopen", fake_urlopen):
+                ok, err, _accounts, bills, _synced, txs = fetch_snapshot()
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+        self.assertEqual(bills[0]["id"], "9")
+        self.assertTrue(any("/api/v1/bills/9/transactions" in url for url in urls))
+        self.assertEqual(txs[0]["id"], "77")

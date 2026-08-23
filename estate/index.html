@@ -59,10 +59,10 @@
         <tbody id="rows"></tbody>
       </table>
       <h1>Bills</h1>
-      <p class="muted">Overdue Firefly bills block CURRENT the same way a stale account does. Extra notes Firefly does not store wait for US-022.</p>
+      <p class="muted">Overdue Firefly bills block CURRENT the same way a stale account does. Next amount is always an estimate, never a ledger fact. Extra notes Firefly does not store wait for US-022.</p>
       <table>
         <thead>
-          <tr><th>Bill</th><th>Payee</th><th>Amount</th><th>Frequency</th><th>Due</th><th>Pay from</th><th>Last paid</th><th>Status</th></tr>
+          <tr><th>Bill</th><th>Payee</th><th>Next (estimate)</th><th>Frequency</th><th>Due</th><th>Pay from</th><th>Last paid</th><th>Status</th></tr>
         </thead>
         <tbody id="bill-rows"></tbody>
       </table>
@@ -104,7 +104,13 @@
             ? billList.map((b) => `<tr>
               <td>${b.name}</td>
               <td>${b.payee || b.name || "—"}</td>
-              <td>${b.amount ? (b.currency ? b.currency + " " : "") + b.amount : "—"}</td>
+              <td>${b.amount_estimate
+                ? `${b.currency ? b.currency + " " : ""}${b.amount_estimate} <span class="muted">${b.estimate_label || "estimate"}${
+                    b.estimate_source === "historical_average"
+                      ? " · historical average of " + b.payment_count
+                      : " · min/max midpoint"
+                  }</span>`
+                : "—"}</td>
               <td>${b.frequency || "—"}</td>
               <td>${b.next_expected || "—"}</td>
               <td>${b.pay_from || "—"}</td>
