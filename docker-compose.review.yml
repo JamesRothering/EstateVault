@@ -19,8 +19,8 @@ services:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
       timeout: 5s
-      retries: 24
-      start_period: 180s
+      retries: 36
+      start_period: 600s
 
   firefly:
     image: fireflyiii/core:latest

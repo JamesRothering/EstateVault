@@ -17,7 +17,7 @@ jobs:
     name: Bring up isolated acceptance
     if: github.event.action != 'closed'
     runs-on: [self-hosted, macOS]
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       COMPOSE_PROGRESS: plain
     steps:

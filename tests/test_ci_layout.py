@@ -42,7 +42,7 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("8190:8090", text)
         self.assertIn("8180:8080", text)
         self.assertIn("estatevault_review_firefly_iii_db", text)
-        self.assertIn("start_period: 180s", text)
+        self.assertIn("start_period: 600s", text)
         self.assertNotIn("8080:8080", text)
 
     def test_review_estate_uses_stable_firefly(self):
@@ -60,7 +60,7 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("127.0.0.1:8190", text)
         self.assertIn("scripts/acceptance_up.sh", text)
         self.assertIn("scripts/acceptance_down.sh", text)
-        self.assertIn("timeout-minutes:", text)
+        self.assertIn("timeout-minutes: 60", text)
         self.assertIn("Runner heartbeat", text)
         self.assertNotIn("stable_up.sh", text)
         self.assertNotIn("down -v", text)
@@ -76,6 +76,10 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("docker-compose.review.yml", up)
         self.assertIn("scripts/wait_http.py", up)
         self.assertIn("retrying once", up)
+        self.assertIn('"${COMPOSE[@]}" start', up)
+        self.assertIn("leftover Created", up)
+        self.assertIn("up -d db", up)
+        self.assertIn("review db status", up)
         self.assertIn("127.0.0.1:8190/api/health", up)
         self.assertIn("127.0.0.1:8180", up)
         self.assertIn("-p estatevault-review", down)
@@ -83,3 +87,7 @@ class CiLayoutTests(unittest.TestCase):
         self.assertNotRegex(down, r"-p estatevault[ \n'\"]")
         self.assertNotIn("down -v", up)
         self.assertNotIn("down -v", down)
+
+    def test_acceptance_runner_install_raises_worker_ipc_timeout(self):
+        text = (ROOT / "scripts" / "install_acceptance_runner.sh").read_text(encoding="utf-8")
+        self.assertIn("GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT=300", text)

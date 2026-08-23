@@ -30,6 +30,11 @@ if [[ ! -f .runner ]]; then
     --work "_work"
 fi
 
+# This Mac is slow: default 30s worker IPC timeout kills the job before any step runs.
+if [[ ! -f .env ]] || ! grep -q GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT .env 2>/dev/null; then
+  printf 'GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT=300\n' >> .env
+fi
+
 echo "Runner configured in $DIR"
 echo "Start it with: $DIR/run.sh"
 echo "Keep Docker Desktop running. GitHub-hosted CI still only runs unit tests."
