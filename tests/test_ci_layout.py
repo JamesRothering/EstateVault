@@ -42,6 +42,10 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("8190:8090", text)
         self.assertIn("8180:8080", text)
         self.assertIn("estatevault_review_firefly_iii_db", text)
+        self.assertIn("start_period: 600s", text)
+        self.assertIn("--su-mysql", text)
+        self.assertIn("estatevault_review_only", text)
+        self.assertIn("MARIADB_AUTO_UPGRADE", text)
         self.assertNotIn("8080:8080", text)
 
     def test_review_estate_uses_stable_firefly(self):
@@ -49,3 +53,49 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("8190:8090", text)
         self.assertIn("estatevault_firefly", text)
         self.assertIn("external: true", text)
+
+    def test_acceptance_workflow_uses_isolated_review_stack(self):
+        text = (ROOT / ".github" / "workflows" / "acceptance.yml").read_text(encoding="utf-8")
+        self.assertIn("pull_request", text)
+        self.assertIn("self-hosted", text)
+        self.assertIn("estatevault-review", text)
+        self.assertIn("127.0.0.1:8180", text)
+        self.assertIn("127.0.0.1:8190", text)
+        self.assertIn("scripts/acceptance_up.sh", text)
+        self.assertIn("scripts/acceptance_down.sh", text)
+        self.assertIn("timeout-minutes: 60", text)
+        self.assertIn("Runner heartbeat", text)
+        self.assertNotIn("stable_up.sh", text)
+        self.assertNotIn("down -v", text)
+        self.assertNotIn("gh pr merge", text)
+        for i, line in enumerate(text.splitlines(), 1):
+            if line.strip().startswith("if:") and "secrets." in line:
+                self.fail(f"line {i}: do not use secrets in if: ({line.strip()})")
+
+    def test_acceptance_scripts_do_not_touch_stable_project(self):
+        up = (ROOT / "scripts" / "acceptance_up.sh").read_text(encoding="utf-8")
+        down = (ROOT / "scripts" / "acceptance_down.sh").read_text(encoding="utf-8")
+        self.assertIn("-p estatevault-review", up)
+        self.assertIn("docker-compose.review.yml", up)
+        self.assertIn("scripts/wait_http.py", up)
+        self.assertIn("retrying once", up)
+        self.assertIn('"${COMPOSE[@]}" start', up)
+        self.assertIn("leftover Created", up)
+        self.assertIn("up -d db", up)
+        self.assertIn("review db status", up)
+        self.assertIn("waiting for review MariaDB", up)
+        self.assertIn(".estatevault-review.env", up)
+        self.assertIn("estatevault_review_firefly_iii_db", up)
+        self.assertIn("volume rm", up)
+        self.assertIn("127.0.0.1:8190/api/health", up)
+        self.assertIn("127.0.0.1:8180", up)
+        self.assertIn("-p estatevault-review", down)
+        self.assertNotRegex(up, r"-p estatevault[ \n'\"]")
+        self.assertNotRegex(down, r"-p estatevault[ \n'\"]")
+        self.assertNotIn("down -v", up)
+        self.assertNotIn("down -v", down)
+        self.assertNotRegex(up, r"volume rm[^\n]*\bestatevault_firefly_iii_db\b")
+
+    def test_acceptance_runner_install_raises_worker_ipc_timeout(self):
+        text = (ROOT / "scripts" / "install_acceptance_runner.sh").read_text(encoding="utf-8")
+        self.assertIn("GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT=300", text)

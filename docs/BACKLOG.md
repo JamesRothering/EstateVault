@@ -15,6 +15,10 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 - **US-013** Overdue Firefly bills block CURRENT (inactive bills ignored; no bills does not block).
 - **US-080** GitHub Checks, `ready` → cloud agent PR, stable `:8090` vs review `:8190`.
 
+## Next — CI / acceptance
+
+- **US-081** Isolated acceptance stack per PR on a self-hosted Mac runner (`:8180` / `:8190`, never stable).
+
 ## Next — Financial health
 
 - **US-010** Per-account reconciliation dates (statement / imported / reconciled).

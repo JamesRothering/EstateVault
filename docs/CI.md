@@ -42,6 +42,16 @@ This uses `main` only (a `EstateVault-stable` worktree when this checkout is on 
 
 Default review starts **Estate only** on 8190 and talks to the stable Firefly container, so you try the new dashboard against Wells Fargo data without cloning the ledger. Isolated full stack (`REVIEW_ISOLATED=1`) is an empty Firefly on 8180/8190 and does not touch the stable volume.
 
+## Acceptance (each open PR, isolated)
+
+GitHub-hosted Checks still do not run Firefly. To put a PR on this Mac automatically:
+
+1. Install the self-hosted runner once: `./scripts/install_acceptance_runner.sh` then `$HOME/estatevault-actions-runner/run.sh` (Docker Desktop must be running). The installer sets `GITHUB_ACTIONS_RUNNER_CHANNEL_TIMEOUT=300` so this Mac is not dropped after 30s of worker startup.
+2. On every open PR, workflow **Acceptance** starts Compose project `estatevault-review`: Firefly [http://127.0.0.1:8180](http://127.0.0.1:8180), Estate [http://127.0.0.1:8190](http://127.0.0.1:8190). The job **fails** unless those URLs return HTTP (not connection refused). Isolated MariaDB/Firefly use a pinned review-only DB password so a fresh Actions `.env` cannot desync from the leftover volume. `acceptance_up.sh` starts MariaDB first, starts leftover Created containers, and recreates a broken review volume only. Prints a line every 10s so the self-hosted runner does not look idle and get dropped.
+3. Closing or merging the PR tears that stack down. Stable `:8080` / `:8090` and its MariaDB volume are not used.
+
+The isolated ledger is **empty**. It is not a copy of Wells Fargo. One PR at a time on 8180/8190.
+
 ## Ready → agent → PR
 
 1. Mark **one** issue `ready` (take `ready` off shipped issues).

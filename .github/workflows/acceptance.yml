@@ -1,0 +1,77 @@
+name: Acceptance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: estatevault-acceptance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy:
+    name: Bring up isolated acceptance
+    if: github.event.action != 'closed'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      COMPOSE_PROGRESS: plain
+    steps:
+      - name: Runner heartbeat
+        run: |
+          echo "host=$(hostname)"
+          docker info --format 'docker={{.ServerVersion}}' 
+          date -u
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Start isolated review stack
+        run: ./scripts/acceptance_up.sh
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+
+      - name: Prove ports answer
+        run: |
+          python3 scripts/wait_http.py --url http://127.0.0.1:8190/api/health --name Estate --timeout 30 --interval 5
+          python3 scripts/wait_http.py --url http://127.0.0.1:8180 --name Firefly --timeout 30 --interval 5
+          curl -fsS http://127.0.0.1:8190/api/health | python3 -c "import json,sys; d=json.load(sys.stdin); assert 'status' in d, d"
+
+      - name: Comment acceptance URLs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr comment "$PR" --repo "$REPO" --body "$(cat <<'EOF'
+          Isolated **acceptance** is up on this Mac (not stable):
+
+          - Firefly: http://127.0.0.1:8180 (empty ledger — create a user, then a PAT if you need Estate to leave UNAVAILABLE)
+          - Estate: http://127.0.0.1:8190
+
+          Stable remains http://127.0.0.1:8080 and http://127.0.0.1:8090. This stack uses separate Compose project `estatevault-review` and does not wipe the stable volume.
+          EOF
+          )"
+
+  teardown:
+    name: Tear down isolated acceptance
+    if: github.event.action == 'closed'
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 10
+    steps:
+      - name: Runner heartbeat
+        run: echo "host=$(hostname)"; date -u
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Stop review stack if this PR owns it
+        run: ./scripts/acceptance_down.sh
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
