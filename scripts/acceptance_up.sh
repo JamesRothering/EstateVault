@@ -12,7 +12,12 @@ if [[ ! -f .env ]]; then
 fi
 
 export COMPOSE_PROGRESS=plain
-docker compose -p estatevault-review -f docker-compose.review.yml up -d
+echo "starting isolated review stack $(date -u +%H:%M:%SZ)"
+if ! docker compose -p estatevault-review -f docker-compose.review.yml up -d; then
+  echo "compose up failed (often a cold MariaDB). retrying once after 30s"
+  sleep 30
+  docker compose -p estatevault-review -f docker-compose.review.yml up -d
+fi
 
 python3 scripts/wait_http.py --url http://127.0.0.1:8190/api/health --name Estate --timeout 180 --interval 10
 python3 scripts/wait_http.py --url http://127.0.0.1:8180 --name Firefly --timeout 900 --interval 10

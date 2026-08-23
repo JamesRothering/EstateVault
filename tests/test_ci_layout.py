@@ -42,6 +42,7 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("8190:8090", text)
         self.assertIn("8180:8080", text)
         self.assertIn("estatevault_review_firefly_iii_db", text)
+        self.assertIn("start_period: 180s", text)
         self.assertNotIn("8080:8080", text)
 
     def test_review_estate_uses_stable_firefly(self):
@@ -74,6 +75,7 @@ class CiLayoutTests(unittest.TestCase):
         self.assertIn("-p estatevault-review", up)
         self.assertIn("docker-compose.review.yml", up)
         self.assertIn("scripts/wait_http.py", up)
+        self.assertIn("retrying once", up)
         self.assertIn("127.0.0.1:8190/api/health", up)
         self.assertIn("127.0.0.1:8180", up)
         self.assertIn("-p estatevault-review", down)
