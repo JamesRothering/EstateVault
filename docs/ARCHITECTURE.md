@@ -27,7 +27,7 @@ Estate dashboard  :8090     Firefly III UI  :8080
 - `FRESHNESS_THRESHOLD_DAYS` (default 30).
 - `WARNING_LEAD_DAYS` (default 7): age in `(threshold - lead, threshold]` is `WARNING`.
 - An unpaid expected bill date on or before `as_of` is `STALE`. Having no bills does not block `CURRENT`.
-- Next: per-account reconciliation and unreconciled transaction search.
+- This ladder **is** the dead-man heartbeat. Successful Firefly maintenance resets it. There is no separate I'm-alive click (US-060). ESTATE TRANSITION is US-062.
 
 ## States (full machine; only the first four are computed today)
 
