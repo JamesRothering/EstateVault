@@ -14,6 +14,7 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 - **US-006** Unused asset accounts (no `last_activity`) do not set overall status to EMPTY.
 - **US-013** Overdue Firefly bills block CURRENT (inactive bills ignored; no bills does not block).
 - **US-080** GitHub Checks, `ready` → cloud agent PR, stable `:8090` vs review `:8190`.
+- **US-070** Secrets only in `.env`; Firefly volume backups (Estate SQLite later).
 
 ## Next — CI / acceptance
 
@@ -53,7 +54,7 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 
 ## Security
 
-- **US-070** Secrets only in `.env` / Docker secrets; backups of Firefly volume + future Estate SQLite.
+- **US-070** implemented: `.env` gitignored; `scripts/backup.py` dumps Firefly volumes; copy off-Mac. Estate SQLite when US-040 exists.
 
 ## Out of scope until a story says otherwise
 

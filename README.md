@@ -36,6 +36,16 @@ python3 -m unittest discover -s tests -v
 
 GitHub Actions runs the same command on every pull request (see [docs/CI.md](docs/CI.md)).
 
+## Backups
+
+Firefly volumes are the ledger. Estate does not store transactions.
+
+```bash
+python3 scripts/backup.py
+```
+
+Writes MariaDB + Firefly uploads (and a mode-600 `.env` copy) to `~/EstateVault-backups/`. Copy that folder to **another disk**. Restore steps: [docs/BACKUP.md](docs/BACKUP.md). `FIREFLY_TOKEN` never belongs in git.
+
 ## Environments
 
 - **Stable** (merged `main`): Firefly [http://127.0.0.1:8080](http://127.0.0.1:8080), Estate [http://127.0.0.1:8090](http://127.0.0.1:8090) — `./scripts/stable_up.sh`
