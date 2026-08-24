@@ -53,10 +53,11 @@ Label an issue `ready` to start a cloud agent that opens a PR. It will not merge
 - Names the account that is blocking CURRENT.
 - Asset accounts with **no activity** (e.g. an unused Cash wallet) stay listed but do not make the overall light EMPTY.
 - Active Firefly bills with an unpaid expected date on or before today block CURRENT.
+- 30 / 60 / 90-day cash forecast: expected Firefly bills vs deposit run-rate, labeled **estimate**.
 
 ## What it does not do yet
 
-Bills view, cash forecast, documents vault, family logins, dead-man’s-switch notifications. See [docs/BACKLOG.md](docs/BACKLOG.md) and GitHub issues.
+Bills view and historical averages are on the dashboard. Documents vault, family logins, dead-man’s-switch notifications. See [docs/BACKLOG.md](docs/BACKLOG.md) and GitHub issues.
 
 ## Docs
 

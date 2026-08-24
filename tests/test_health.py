@@ -796,6 +796,157 @@ class HealthTests(unittest.TestCase):
         self.assertEqual(bill.payment_count, 1)
         self.assertEqual(bill.estimate_label, "estimate")
 
+    def test_forecast_sums_bill_pay_dates_into_30_60_90_windows(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "amount_min": "100.00",
+                        "amount_max": "100.00",
+                        "currency_code": "USD",
+                        "pay_dates": ["2026-09-01", "2026-10-01", "2026-11-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual([row.days for row in report.forecast], [30, 60, 90])
+        self.assertEqual(report.forecast[0].bills, "100.00")
+        self.assertEqual(report.forecast[0].bill_count, 1)
+        self.assertEqual(report.forecast[1].bills, "200.00")
+        self.assertEqual(report.forecast[1].bill_count, 2)
+        self.assertEqual(report.forecast[2].bills, "300.00")
+        self.assertEqual(report.forecast[2].bill_count, 3)
+        for row in report.forecast:
+            self.assertEqual(row.estimate_label, "estimate")
+            self.assertEqual(row.income, "0.00")
+        payload = report_to_dict(report)["forecast"]
+        self.assertEqual(payload[0]["days"], 30)
+        self.assertEqual(payload[0]["bills"], "100.00")
+        self.assertEqual(payload[0]["estimate_label"], "estimate")
+
+    def test_forecast_income_is_deposit_run_rate_labeled_estimate(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[],
+            transactions=[
+                {
+                    "id": "50",
+                    "attributes": {
+                        "date": "2026-01-20",
+                        "transactions": [
+                            {
+                                "amount": "3650.00",
+                                "type": "deposit",
+                                "date": "2026-01-20",
+                                "destination_id": "1",
+                                "reconciled": True,
+                            }
+                        ],
+                    },
+                }
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.CURRENT)
+        self.assertEqual(report.forecast[0].income, "300.00")
+        self.assertEqual(report.forecast[0].bills, "0.00")
+        self.assertEqual(report.forecast[0].net, "300.00")
+        self.assertEqual(report.forecast[1].income, "600.00")
+        self.assertEqual(report.forecast[2].income, "900.00")
+        self.assertEqual(report.forecast[0].estimate_label, "estimate")
+        self.assertEqual(report.forecast[0].income_source, "deposit_run_rate")
+        self.assertEqual(report_to_dict(report)["forecast"][0]["income"], "300.00")
+
+    def test_overdue_bill_counts_in_every_forecast_window(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Electric",
+                        "active": True,
+                        "amount_min": "85.00",
+                        "amount_max": "85.00",
+                        "pay_dates": ["2026-08-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertIs(report.status, Status.STALE)
+        for row in report.forecast:
+            self.assertEqual(row.bills, "85.00")
+            self.assertEqual(row.bill_count, 1)
+            self.assertEqual(row.estimate_label, "estimate")
+
+    def test_inactive_bill_is_not_in_forecast(self):
+        as_of = date(2026, 8, 20)
+        report = assess(
+            firefly_ok=True,
+            firefly_error=None,
+            accounts=[
+                {
+                    "id": "1",
+                    "attributes": {"name": "Wells Fargo", "last_activity": "2026-08-19"},
+                },
+            ],
+            bills=[
+                {
+                    "id": "9",
+                    "attributes": {
+                        "name": "Old magazine",
+                        "active": False,
+                        "amount_min": "20.00",
+                        "amount_max": "20.00",
+                        "pay_dates": ["2026-09-01"],
+                        "paid_dates": [],
+                    },
+                },
+            ],
+            as_of=as_of,
+        )
+        self.assertEqual(report.bills, ())
+        self.assertEqual(report.forecast[0].bills, "0.00")
+        self.assertEqual(report.forecast[0].bill_count, 0)
+
+    def test_unavailable_firefly_has_no_forecast(self):
+        report = assess(firefly_ok=False, firefly_error="down", accounts=[])
+        self.assertEqual(report.forecast, ())
+        self.assertEqual(report_to_dict(report)["forecast"], [])
+
 
 if __name__ == "__main__":
     unittest.main()

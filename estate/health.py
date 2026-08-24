@@ -13,6 +13,10 @@ ESTIMATE_LOOKBACK_DAYS = 365
 ESTIMATE_LABEL = "estimate"
 SOURCE_HISTORICAL = "historical_average"
 SOURCE_MIDPOINT = "range_midpoint"
+SOURCE_DEPOSIT_RUN_RATE = "deposit_run_rate"
+SOURCE_BILL_SCHEDULE = "firefly_bills"
+FORECAST_WINDOWS = (30, 60, 90)
+FORECAST_HORIZON_DAYS = 90
 
 
 class Status(str, Enum):
@@ -64,6 +68,19 @@ class BillFreshness:
     estimate_label: str | None = None
     estimate_source: str | None = None
     payment_count: int = 0
+    pay_dates: tuple[date, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class ForecastWindow:
+    days: int
+    bills: str
+    income: str
+    net: str
+    bill_count: int
+    estimate_label: str
+    bills_source: str
+    income_source: str
 
 
 @dataclass(frozen=True)
@@ -84,6 +101,7 @@ class HealthReport:
     accounts: tuple[AccountFreshness, ...] = field(default_factory=tuple)
     bills: tuple[BillFreshness, ...] = field(default_factory=tuple)
     notes: tuple[str, ...] = field(default_factory=tuple)
+    forecast: tuple[ForecastWindow, ...] = field(default_factory=tuple)
 
 
 def parse_day(value: object) -> date | None:
@@ -442,7 +460,94 @@ def bill_from_firefly(
         estimate_label=ESTIMATE_LABEL if estimate is not None else None,
         estimate_source=source,
         payment_count=payment_count,
+        pay_dates=tuple(sorted(pay_dates)),
     )
+
+
+def _occurrence_dates(bill: BillFreshness, *, as_of: date, horizon_end: date) -> list[date]:
+    seen: set[date] = set()
+    out: list[date] = []
+
+    def add(day: date | None) -> None:
+        if day is None or day in seen:
+            return
+        seen.add(day)
+        out.append(day)
+
+    for day in bill.pay_dates:
+        if as_of < day <= horizon_end:
+            add(day)
+    if bill.next_expected is not None and as_of < bill.next_expected <= horizon_end:
+        add(bill.next_expected)
+    if bill.overdue:
+        add(as_of)
+    return out
+
+
+def _deposit_total(
+    transactions: list[dict] | None,
+    *,
+    as_of: date,
+    lookback_days: int,
+) -> Decimal:
+    total = Decimal("0")
+    for split, group_day in iter_splits(transactions):
+        if str(split.get("type") or "").strip().lower() != "deposit":
+            continue
+        day = _split_day(split, group_day)
+        if not _in_lookback(day, as_of=as_of, lookback_days=lookback_days):
+            continue
+        money = parse_money(split.get("amount"))
+        if money is not None:
+            total += money
+    return total
+
+
+def cash_forecast(
+    bills: Iterable[BillFreshness],
+    transactions: list[dict] | None,
+    *,
+    as_of: date,
+    lookback_days: int = ESTIMATE_LOOKBACK_DAYS,
+    windows: tuple[int, ...] = FORECAST_WINDOWS,
+) -> tuple[ForecastWindow, ...]:
+    horizon = max(windows) if windows else FORECAST_HORIZON_DAYS
+    horizon_end = as_of + timedelta(days=horizon)
+    deposit_total = _deposit_total(
+        transactions, as_of=as_of, lookback_days=lookback_days
+    )
+    divisor = Decimal(max(1, lookback_days))
+    rows: list[ForecastWindow] = []
+    for days in windows:
+        window_end = as_of + timedelta(days=days)
+        bill_total = Decimal("0")
+        bill_count = 0
+        for bill in bills:
+            amount = parse_money(bill.amount_estimate)
+            if amount is None:
+                continue
+            for due in _occurrence_dates(bill, as_of=as_of, horizon_end=horizon_end):
+                if due <= window_end:
+                    bill_total += amount
+                    bill_count += 1
+        income = (deposit_total * Decimal(days) / divisor).quantize(
+            _CENTS, rounding=ROUND_HALF_EVEN
+        )
+        bills_out = bill_total.quantize(_CENTS, rounding=ROUND_HALF_EVEN)
+        net = (income - bills_out).quantize(_CENTS, rounding=ROUND_HALF_EVEN)
+        rows.append(
+            ForecastWindow(
+                days=days,
+                bills=_format_money(bills_out),
+                income=_format_money(income),
+                net=_format_money(net),
+                bill_count=bill_count,
+                estimate_label=ESTIMATE_LABEL,
+                bills_source=SOURCE_BILL_SCHEDULE,
+                income_source=SOURCE_DEPOSIT_RUN_RATE,
+            )
+        )
+    return tuple(rows)
 
 
 def assess(
@@ -480,6 +585,8 @@ def assess(
                 "Financial information is not trustworthy until Firefly answers.",
             ),
         )
+
+    forecast_rows = cash_forecast(bill_rows, transactions, as_of=as_of)
 
     rows = [
         account_from_firefly(
@@ -524,6 +631,7 @@ def assess(
                 notes=(
                     f"{worst_bill.name} is overdue in Firefly (expected {expected}, unpaid).",
                 ),
+                forecast=forecast_rows,
             )
         return HealthReport(
             status=Status.EMPTY,
@@ -538,6 +646,7 @@ def assess(
             notes=(
                 "Firefly has no asset accounts yet. This is not CURRENT.",
             ),
+            forecast=forecast_rows,
         )
 
     if not tracked:
@@ -565,6 +674,7 @@ def assess(
                 accounts=tuple(rows),
                 bills=bill_rows,
                 notes=tuple(notes),
+                forecast=forecast_rows,
             )
         return HealthReport(
             status=Status.EMPTY,
@@ -582,6 +692,7 @@ def assess(
             accounts=tuple(rows),
             bills=bill_rows,
             notes=(f"No asset account has recorded activity yet ({names}).",),
+            forecast=forecast_rows,
         )
 
     worst = max(tracked, key=lambda row: _rank(row.status, row.age_days))
@@ -635,6 +746,7 @@ def assess(
         accounts=tuple(rows),
         bills=bill_rows,
         notes=tuple(notes),
+        forecast=forecast_rows,
     )
 
 
@@ -691,5 +803,18 @@ def report_to_dict(report: HealthReport) -> dict:
                 "status": row.status.value,
             }
             for row in report.bills
+        ],
+        "forecast": [
+            {
+                "days": row.days,
+                "bills": row.bills,
+                "income": row.income,
+                "net": row.net,
+                "bill_count": row.bill_count,
+                "estimate_label": row.estimate_label,
+                "bills_source": row.bills_source,
+                "income_source": row.income_source,
+            }
+            for row in report.forecast
         ],
     }

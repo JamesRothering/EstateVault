@@ -66,6 +66,14 @@
         </thead>
         <tbody id="bill-rows"></tbody>
       </table>
+      <h1>30 / 60 / 90-day cash forecast</h1>
+      <p class="muted">Expected bills vs expected income. These numbers are estimates, never ledger facts. No planning engine.</p>
+      <table>
+        <thead>
+          <tr><th>Window</th><th>Expected bills</th><th>Expected income</th><th>Net</th></tr>
+        </thead>
+        <tbody id="forecast-rows"></tbody>
+      </table>
     </main>
     <script>
       const banner = document.getElementById("banner");
@@ -118,6 +126,16 @@
               <td class="${b.status}">${b.overdue ? "OVERDUE" : b.status}</td>
             </tr>`).join("")
             : `<tr><td colspan="8" class="muted">No active Firefly bills in this window.</td></tr>`;
+          const forecastBody = document.getElementById("forecast-rows");
+          const forecastList = data.forecast || [];
+          forecastBody.innerHTML = forecastList.length
+            ? forecastList.map((f) => `<tr>
+              <td>${f.days} days</td>
+              <td>${f.bills} <span class="muted">${f.estimate_label || "estimate"}</span></td>
+              <td>${f.income} <span class="muted">${f.estimate_label || "estimate"}</span></td>
+              <td>${f.net} <span class="muted">${f.estimate_label || "estimate"}</span></td>
+            </tr>`).join("")
+            : `<tr><td colspan="4" class="muted">No forecast until Firefly answers.</td></tr>`;
         })
         .catch((err) => {
           banner.innerHTML = `<div class="status UNAVAILABLE">UNAVAILABLE</div><p>${err}</p>`;

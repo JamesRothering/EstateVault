@@ -175,3 +175,68 @@ class FireflyClientTests(unittest.TestCase):
         self.assertEqual(bills[0]["id"], "9")
         self.assertTrue(any("/api/v1/transactions?type=withdrawal" in url for url in urls))
         self.assertEqual(txs[0]["id"], "77")
+
+    def test_fetch_snapshot_asks_firefly_for_90_day_bills_and_deposits(self):
+        from datetime import date
+        from urllib.parse import parse_qs, urlparse
+
+        urls = []
+
+        def fake_urlopen(req, timeout=None):
+            urls.append(req.full_url)
+            if req.full_url.endswith("/api/v1/about"):
+                return _Resp({"data": {"version": "6.2.0"}})
+            if "/api/v1/accounts?type=asset" in req.full_url:
+                return _Resp({"data": []})
+            if "/api/v1/bills?" in req.full_url:
+                return _Resp({"data": []})
+            if "/api/v1/transactions?type=deposit" in req.full_url:
+                return _Resp(
+                    {
+                        "data": [
+                            {
+                                "id": "80",
+                                "attributes": {
+                                    "date": "2026-01-20",
+                                    "transactions": [
+                                        {
+                                            "amount": "3650.00",
+                                            "type": "deposit",
+                                            "date": "2026-01-20",
+                                        }
+                                    ],
+                                },
+                            }
+                        ],
+                        "meta": {"pagination": {"current_page": 1, "total_pages": 1}},
+                    }
+                )
+            if "/api/v1/transactions?type=withdrawal" in req.full_url:
+                return _Resp(
+                    {
+                        "data": [],
+                        "meta": {"pagination": {"current_page": 1, "total_pages": 1}},
+                    }
+                )
+            if "/api/v1/search/transactions" in req.full_url:
+                return _Resp(
+                    {
+                        "data": [],
+                        "meta": {"pagination": {"current_page": 1, "total_pages": 1}},
+                    }
+                )
+            return _Resp({"data": []})
+
+        env = {"FIREFLY_TOKEN": "pat-test", "FIREFLY_URL": "http://ff.example"}
+        with patch.dict(os.environ, env, clear=False):
+            with patch("urllib.request.urlopen", fake_urlopen):
+                ok, err, _accounts, _bills, _synced, txs = fetch_snapshot()
+        self.assertTrue(ok)
+        self.assertIsNone(err)
+        bills_url = next(url for url in urls if "/api/v1/bills?" in url)
+        query = parse_qs(urlparse(bills_url).query)
+        start = date.fromisoformat(query["start"][0])
+        end = date.fromisoformat(query["end"][0])
+        self.assertGreaterEqual((end - start).days, 90)
+        self.assertTrue(any("/api/v1/transactions?type=deposit" in url for url in urls))
+        self.assertTrue(any(row["id"] == "80" for row in txs))
