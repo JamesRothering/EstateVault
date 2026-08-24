@@ -14,26 +14,19 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 - **US-006** Unused asset accounts (no `last_activity`) do not set overall status to EMPTY.
 - **US-013** Overdue Firefly bills block CURRENT (inactive bills ignored; no bills does not block).
 - **US-080** GitHub Checks, `ready` → cloud agent PR, stable `:8090` vs review `:8190`.
-
-## Next — CI / acceptance
-
 - **US-081** Isolated acceptance stack per PR on a self-hosted Mac runner (`:8180` / `:8190`, never stable).
-
-## Next — Financial health
-
 - **US-010** Per-account reconciliation dates (statement / imported / reconciled).
 - **US-011** Oldest unreconciled Firefly transaction (`reconciled:false`).
 - **US-012** Last successful import/sync timestamp (Data Importer + Firefly).
+- **US-020** Consolidated bill view from Firefly bills + last payment.
+- **US-021** Historical average / expected next amount (deterministic, labeled estimate).
+- **US-030** 30/60/90-day expected bills vs income (simple, labeled estimates).
 
 ## Bill management
 
-- **US-020** Consolidated bill view from Firefly bills + last payment.
-- **US-021** Historical average / expected next amount (deterministic, labeled estimate).
 - **US-022** Due date, pay-from account, notes that Firefly does not store.
 
 ## Forecasting
-
-- **US-030** 30/60/90-day expected bills vs income (simple, labeled estimates).
 - **US-031** Warn when a month’s projected outflow exceeds expected cash.
 
 ## Estate metadata (not in Firefly)

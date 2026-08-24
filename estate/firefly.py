@@ -9,7 +9,7 @@ import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 
-from estate.health import ESTIMATE_LOOKBACK_DAYS
+from estate.health import ESTIMATE_LOOKBACK_DAYS, FORECAST_HORIZON_DAYS
 
 
 class FireflyError(RuntimeError):
@@ -153,16 +153,21 @@ def fetch_snapshot(*, lookback_days: int = 30) -> tuple[bool, str | None, list[d
     as_of = datetime.now(timezone.utc).date()
     start = as_of - timedelta(days=max(1, lookback_days))
     history_start = as_of - timedelta(days=ESTIMATE_LOOKBACK_DAYS)
+    forecast_end = as_of + timedelta(days=FORECAST_HORIZON_DAYS)
     try:
         about()
         accounts = asset_accounts()
-        bill_rows = bills(start, as_of)
+        bill_rows = bills(start, forecast_end)
         txs = recon_transactions()
         try:
             history = list_transactions(history_start, as_of)
         except FireflyError:
             history = []
-        txs = _merge_transactions(txs, history)
+        try:
+            deposits = list_transactions(history_start, as_of, tx_type="deposit")
+        except FireflyError:
+            deposits = []
+        txs = _merge_transactions(txs, history, deposits)
     except FireflyError as exc:
         return False, str(exc), [], [], synced, []
     return True, None, accounts, bill_rows, synced, txs
