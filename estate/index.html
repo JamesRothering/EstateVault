@@ -24,6 +24,10 @@
       }
       main { max-width: 42rem; margin: 2.5rem auto; padding: 0 1.25rem; }
       h1 { font-size: 1.4rem; font-weight: 600; }
+      h2 { font-size: 1.05rem; font-weight: 600; margin: 1.1rem 0 0.2rem; }
+      label { display: block; margin: 0.35rem 0; font-family: system-ui, sans-serif; }
+      input, select, textarea, button { font-family: system-ui, sans-serif; font-size: 0.95rem; }
+      textarea { width: 100%; }
       p, li, td, th { font-family: system-ui, sans-serif; font-size: 0.95rem; }
       .muted { color: var(--muted); }
       .banner {
@@ -66,6 +70,27 @@
         </thead>
         <tbody id="bill-rows"></tbody>
       </table>
+      <h1>Estate documents</h1>
+      <p class="muted">Contacts, instructions, insurance, property, vehicles, and document locations. Firefly must not hold these. Not a copy of transactions.</p>
+      <form id="vault-form">
+        <p>
+          <label>Kind
+            <select name="kind" required>
+              <option value="contact">contact</option>
+              <option value="document">document</option>
+              <option value="instruction">instruction</option>
+              <option value="insurance">insurance</option>
+              <option value="property">property</option>
+              <option value="vehicle">vehicle</option>
+            </select>
+          </label>
+        </p>
+        <p><label>Title <input name="title" required maxlength="200" /></label></p>
+        <p><label>Details <textarea name="body" rows="3"></textarea></label></p>
+        <p><button type="submit">Save in Estate</button></p>
+        <p id="vault-msg" class="muted"></p>
+      </form>
+      <div id="vault"></div>
     </main>
     <script>
       const banner = document.getElementById("banner");
@@ -122,6 +147,55 @@
         .catch((err) => {
           banner.innerHTML = `<div class="status UNAVAILABLE">UNAVAILABLE</div><p>${err}</p>`;
         });
+
+      const vaultEl = document.getElementById("vault");
+      const vaultMsg = document.getElementById("vault-msg");
+      const vaultForm = document.getElementById("vault-form");
+      const kinds = ["contact", "document", "instruction", "insurance", "property", "vehicle"];
+      function renderVault(data) {
+        const byKind = data.by_kind || {};
+        vaultEl.innerHTML = kinds.map((kind) => {
+          const rows = byKind[kind] || [];
+          const body = rows.length
+            ? `<table><thead><tr><th>Title</th><th>Details</th></tr></thead><tbody>${
+                rows.map((item) => `<tr><td>${item.title || ""}</td><td>${item.body || ""}</td></tr>`).join("")
+              }</tbody></table>`
+            : `<p class="muted">None yet.</p>`;
+          return `<h2>${kind}</h2>${body}`;
+        }).join("");
+      }
+      function loadVault() {
+        fetch("/api/vault")
+          .then((r) => r.json())
+          .then(renderVault)
+          .catch((err) => { vaultMsg.textContent = String(err); });
+      }
+      vaultForm.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        const fd = new FormData(vaultForm);
+        fetch("/api/vault", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: fd.get("kind"),
+            title: fd.get("title"),
+            body: fd.get("body") || "",
+            extra: {},
+          }),
+        })
+          .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+          .then(({ ok, data }) => {
+            if (!ok) {
+              vaultMsg.textContent = data.error || "Could not save.";
+              return;
+            }
+            vaultMsg.textContent = "Saved in Estate (not Firefly).";
+            vaultForm.reset();
+            loadVault();
+          })
+          .catch((err) => { vaultMsg.textContent = String(err); });
+      });
+      loadVault();
     </script>
   </body>
 </html>

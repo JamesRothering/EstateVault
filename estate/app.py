@@ -1,4 +1,4 @@
-"""Minimal Estate web UI: health only. No Firefly credentials in the page."""
+"""Minimal Estate web UI: health plus estate documents. No Firefly credentials in the page."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from pathlib import Path
 
 from estate.firefly import fetch_snapshot
 from estate.health import assess, report_to_dict
+from estate.vault import VaultError, add_item, default_db_path, payload as vault_payload
 
 HOST = os.environ.get("ESTATE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ESTATE_PORT", "8090"))
@@ -50,11 +51,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path in {"/", "/index.html"}:
+        path = self.path.split("?", 1)[0]
+        if path in {"/", "/index.html"}:
             html = TEMPLATE.read_text(encoding="utf-8")
             self._send(200, html.encode("utf-8"), "text/html; charset=utf-8")
             return
-        if self.path.startswith("/api/health"):
+        if path.startswith("/api/health"):
             try:
                 payload = report_to_dict(build_report())
             except Exception as exc:  # noqa: BLE001 — dashboard must still answer
@@ -68,7 +70,44 @@ class Handler(BaseHTTPRequestHandler):
                 }
             self._send(200, json.dumps(payload).encode("utf-8"), "application/json")
             return
+        if path == "/api/vault":
+            self._send(200, json.dumps(vault_payload()).encode("utf-8"), "application/json")
+            return
         self._send(404, b'{"error":"not found"}', "application/json")
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = self.path.split("?", 1)[0]
+        if path != "/api/vault":
+            self._send(404, b'{"error":"not found"}', "application/json")
+            return
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            self._send(400, b'{"error":"invalid content length"}', "application/json")
+            return
+        raw = self.rfile.read(length) if length else b""
+        try:
+            data = json.loads(raw.decode("utf-8") or "{}")
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            self._send(400, b'{"error":"invalid json"}', "application/json")
+            return
+        if not isinstance(data, dict):
+            self._send(400, b'{"error":"JSON object required"}', "application/json")
+            return
+        extra = data.get("extra") or {}
+        try:
+            item = add_item(
+                default_db_path(),
+                kind=str(data.get("kind") or ""),
+                title=str(data.get("title") or ""),
+                body=str(data.get("body") or ""),
+                extra=extra if isinstance(extra, dict) else {},
+            )
+        except VaultError as exc:
+            body = json.dumps({"error": str(exc)}).encode("utf-8")
+            self._send(400, body, "application/json")
+            return
+        self._send(201, json.dumps({"item": item.to_dict()}).encode("utf-8"), "application/json")
 
 
 def main() -> None:

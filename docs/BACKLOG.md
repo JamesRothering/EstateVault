@@ -38,7 +38,7 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 
 ## Estate metadata (not in Firefly)
 
-- **US-040** Contacts, documents, instructions, insurance, property, vehicles.
+- **US-040** implemented: SQLite vault for contacts, documents, instructions, insurance, property, vehicles. Not a ledger.
 - **US-041** “How to handle this account” notes linked to a Firefly account id.
 
 ## Family access
