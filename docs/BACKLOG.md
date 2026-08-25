@@ -47,7 +47,7 @@ Overnight and daytime work pick GitHub issues labeled **ready**. Do not invent a
 
 ## Dead man’s switch
 
-- **US-060** Map freshness to CURRENT → WARNING → STALE (already started).
+- **US-060** implemented: freshness CURRENT → WARNING → STALE from Firefly maintenance. No I'm-alive button. Notifications US-061; transition US-062.
 - **US-061** Notifications on WARNING and STALE.
 - **US-062** ESTATE TRANSITION after configurable stale period; audit; cancel/recover.
 
